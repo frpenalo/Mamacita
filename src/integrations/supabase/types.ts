@@ -111,6 +111,8 @@ export type Database = {
           shop_name: string
           timezone: string | null
           user_id: string
+          vapi_assistant_id: string | null
+          vapi_phone_number_id: string | null
           whatsapp_business_number: string | null
           whatsapp_number: string | null
           working_days: string[] | null
@@ -127,6 +129,8 @@ export type Database = {
           shop_name: string
           timezone?: string | null
           user_id: string
+          vapi_assistant_id?: string | null
+          vapi_phone_number_id?: string | null
           whatsapp_business_number?: string | null
           whatsapp_number?: string | null
           working_days?: string[] | null
@@ -143,6 +147,8 @@ export type Database = {
           shop_name?: string
           timezone?: string | null
           user_id?: string
+          vapi_assistant_id?: string | null
+          vapi_phone_number_id?: string | null
           whatsapp_business_number?: string | null
           whatsapp_number?: string | null
           working_days?: string[] | null
