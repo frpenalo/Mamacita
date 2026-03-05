@@ -212,21 +212,36 @@ Deno.serve(async (req) => {
       availableStr = "No hay horarios disponibles hoy ni mañana";
     }
 
-    const response = {
-      assistant: {
-        firstMessage: `Hola, gracias por llamar a ${barber.shop_name}. ¿Te gustaría agendar una cita?`,
-        variableValues: {
-          shop_name: barber.shop_name,
-          barber_name: barber.name,
-          barber_id: barber.id,
-          address: barber.address || "",
-          working_hours_start: formatWorkHour(workStart),
-          working_hours_end: formatWorkHour(workEnd),
-          working_days: formatWorkingDays(barber.working_days),
-          available_slots: availableStr,
-        },
-      },
+    const vapiAssistantId = barber.vapi_assistant_id;
+
+    // Build response: if barber has a Vapi assistant configured, use it with overrides
+    // Otherwise return a full assistant object (will likely not work well without model config)
+    const variableValues = {
+      shop_name: barber.shop_name,
+      barber_name: barber.name,
+      barber_id: barber.id,
+      address: barber.address || "",
+      working_hours_start: formatWorkHour(workStart),
+      working_hours_end: formatWorkHour(workEnd),
+      working_days: formatWorkingDays(barber.working_days),
+      available_slots: availableStr,
     };
+
+    const response: any = {};
+
+    if (vapiAssistantId) {
+      // Use existing assistant with variable overrides
+      response.assistantId = vapiAssistantId;
+      response.assistantOverrides = {
+        variableValues,
+      };
+    } else {
+      // Fallback: full assistant definition (requires model/voice config in Vapi)
+      response.assistant = {
+        firstMessage: `Hola, gracias por llamar a ${barber.shop_name}. ¿Te gustaría agendar una cita?`,
+        variableValues,
+      };
+    }
 
     return new Response(JSON.stringify(response), {
       status: 200,
