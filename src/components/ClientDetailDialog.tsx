@@ -74,6 +74,15 @@ const ClientDetailDialog = ({ open, onOpenChange, client, onCreateAppointment }:
             </div>
           </div>
 
+          {onCreateAppointment && (
+            <Button
+              onClick={() => onCreateAppointment(client)}
+              className="w-full gold-gradient text-primary-foreground font-semibold"
+            >
+              <Plus className="mr-2 h-4 w-4" /> Crear cita
+            </Button>
+          )}
+
           {/* Appointments */}
           <div>
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Historial de citas</p>
