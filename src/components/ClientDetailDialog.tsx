@@ -10,6 +10,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   client: any;
+  onCreateAppointment?: (client: any) => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -28,7 +29,7 @@ const statusLabels: Record<string, string> = {
   rescheduled: 'Reagendada',
 };
 
-const ClientDetailDialog = ({ open, onOpenChange, client }: Props) => {
+const ClientDetailDialog = ({ open, onOpenChange, client, onCreateAppointment }: Props) => {
   const { data: appointments = [] } = useQuery({
     queryKey: ['client-appointments', client?.id],
     queryFn: async () => {
