@@ -24,7 +24,13 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { barber_id, customer_name, customer_phone, start_time } = body;
+
+    // Support both direct body params and Vapi tool-call structure
+    const args =
+      body?.message?.toolCallList?.[0]?.function?.arguments ||
+      body;
+
+    const { barber_id, customer_name, customer_phone, start_time } = args;
 
     if (!barber_id || !customer_name || !customer_phone || !start_time) {
       return new Response(
