@@ -68,7 +68,7 @@ const Onboarding = () => {
       <div className="w-full max-w-sm animate-fade-in">
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-2">
-            <img src={logoIcon} alt="MamaCita" className="h-6 w-6" />
+            <img src={logoIcon} alt="MamaCita" className="h-12 w-12" />
             <span className="text-xl font-bold gold-text">MamaCita</span>
           </div>
           <div className="flex justify-center gap-2 mt-4">
