@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Scissors, ArrowRight, ArrowLeft, Check } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check } from 'lucide-react';
+import logoIcon from '@/assets/logo.ico';
 import { toast } from 'sonner';
 
 const DAYS = [
@@ -67,7 +68,7 @@ const Onboarding = () => {
       <div className="w-full max-w-sm animate-fade-in">
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-2">
-            <Scissors className="h-6 w-6 text-primary" />
+            <img src={logoIcon} alt="MamaCita" className="h-6 w-6" />
             <span className="text-xl font-bold gold-text">MamaCita</span>
           </div>
           <div className="flex justify-center gap-2 mt-4">

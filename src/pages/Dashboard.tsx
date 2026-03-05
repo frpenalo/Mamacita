@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBarber } from '@/hooks/useBarber';
 import BottomNav from '@/components/BottomNav';
-import { Scissors, Plus, Clock, User } from 'lucide-react';
+import { Plus, Clock, User } from 'lucide-react';
+import logoIcon from '@/assets/logo.ico';
 import NewAppointmentDialog from '@/components/NewAppointmentDialog';
 import AppointmentActions from '@/components/AppointmentActions';
 
@@ -80,7 +81,7 @@ const Dashboard = () => {
       {/* Header */}
       <div className="px-4 pt-6 pb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Scissors className="h-6 w-6 text-primary" />
+          <img src={logoIcon} alt="MamaCita" className="h-6 w-6" />
           <span className="text-lg font-bold gold-text">MamaCita</span>
         </div>
         <div className="text-right">
