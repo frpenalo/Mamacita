@@ -12,6 +12,7 @@ const Clients = () => {
   const { data: barber } = useBarber();
   const [search, setSearch] = useState('');
   const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [apptClient, setApptClient] = useState<any>(null);
   const [showNewAppt, setShowNewAppt] = useState(false);
 
   const { data: clients = [] } = useQuery({
@@ -96,7 +97,8 @@ const Clients = () => {
         open={!!selectedClient}
         onOpenChange={(v) => !v && setSelectedClient(null)}
         client={selectedClient}
-        onCreateAppointment={() => {
+        onCreateAppointment={(client) => {
+          setApptClient(client);
           setSelectedClient(null);
           setShowNewAppt(true);
         }}
@@ -107,7 +109,8 @@ const Clients = () => {
         barberId={barber?.id}
         barberStart={barber?.working_hours_start || '09:00'}
         barberEnd={barber?.working_hours_end || '18:00'}
-        onCreated={() => setShowNewAppt(false)}
+        preselectedClient={apptClient}
+        onCreated={() => { setShowNewAppt(false); setApptClient(null); }}
       />
       <BottomNav />
     </div>

@@ -20,10 +20,11 @@ interface Props {
   barberId?: string;
   barberStart?: string;
   barberEnd?: string;
+  preselectedClient?: any;
   onCreated?: () => void;
 }
 
-const NewAppointmentDialog = ({ open, onOpenChange, barberId, barberStart = '09:00', barberEnd = '18:00', onCreated }: Props) => {
+const NewAppointmentDialog = ({ open, onOpenChange, barberId, barberStart = '09:00', barberEnd = '18:00', preselectedClient, onCreated }: Props) => {
   // Client
   const [clientSearch, setClientSearch] = useState('');
   const [clients, setClients] = useState<any[]>([]);
@@ -73,6 +74,13 @@ const NewAppointmentDialog = ({ open, onOpenChange, barberId, barberStart = '09:
       setHoldId(null);
     }
   }, [holdId]);
+
+  // Set preselected client when dialog opens
+  useEffect(() => {
+    if (open && preselectedClient) {
+      setSelectedClient(preselectedClient);
+    }
+  }, [open, preselectedClient]);
 
   useEffect(() => {
     if (!open) {
