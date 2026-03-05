@@ -83,7 +83,10 @@ Deno.serve(async (req) => {
     }
 
     // 2. Calculate end_time
-    const startDate = new Date(start_time);
+    // start_time comes as EST (no timezone info), convert to UTC by adding 5 hours
+    const estDate = new Date(start_time);
+    const EST_OFFSET_MS = 5 * 60 * 60 * 1000;
+    const startDate = new Date(estDate.getTime() + EST_OFFSET_MS);
     const endDate = new Date(startDate.getTime() + SLOT_DURATION * 60000);
 
     // 3. Generate unique appointment code
