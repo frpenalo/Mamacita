@@ -6,44 +6,45 @@
 
 @layer base {
   :root {
-    --background: 0 0% 10%;
+    --background: 0 0% 5.5%;
     --foreground: 0 0% 100%;
 
-    --card: 0 0% 13%;
+    --card: 0 0% 10.2%;
     --card-foreground: 0 0% 100%;
 
-    --popover: 0 0% 13%;
+    --popover: 0 0% 10.2%;
     --popover-foreground: 0 0% 100%;
 
-    --primary: 43 52% 54%;
-    --primary-foreground: 0 0% 10%;
+    --primary: 37 41% 61%;
+    --primary-foreground: 0 0% 5.5%;
+    --primary-hover: 37 35% 54%;
 
-    --secondary: 0 0% 18%;
+    --secondary: 0 0% 10.2%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 0 0% 18%;
-    --muted-foreground: 0 0% 60%;
+    --muted: 0 0% 10.2%;
+    --muted-foreground: 0 0% 54%;
 
-    --accent: 43 52% 54%;
-    --accent-foreground: 0 0% 10%;
+    --accent: 37 41% 61%;
+    --accent-foreground: 0 0% 5.5%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 22%;
-    --input: 0 0% 22%;
-    --ring: 43 52% 54%;
+    --border: 0 0% 16.5%;
+    --input: 0 0% 16.5%;
+    --ring: 37 41% 61%;
 
     --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 10%;
+    --sidebar-background: 0 0% 5.5%;
     --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 43 52% 54%;
-    --sidebar-primary-foreground: 0 0% 10%;
-    --sidebar-accent: 0 0% 18%;
+    --sidebar-primary: 37 41% 61%;
+    --sidebar-primary-foreground: 0 0% 5.5%;
+    --sidebar-accent: 0 0% 10.2%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 0 0% 22%;
-    --sidebar-ring: 43 52% 54%;
+    --sidebar-border: 0 0% 16.5%;
+    --sidebar-ring: 37 41% 61%;
   }
 }
 
@@ -60,11 +61,15 @@
 
 @layer utilities {
   .gold-gradient {
-    background: linear-gradient(135deg, hsl(43 52% 54%), hsl(43 72% 64%));
+    background: linear-gradient(135deg, hsl(37 41% 61%), hsl(37 51% 68%));
+  }
+
+  .gold-gradient:hover {
+    background: linear-gradient(135deg, hsl(37 35% 54%), hsl(37 41% 61%));
   }
   
   .gold-text {
-    background: linear-gradient(135deg, hsl(43 52% 54%), hsl(43 72% 64%));
+    background: linear-gradient(135deg, hsl(37 41% 61%), hsl(37 55% 72%));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
