@@ -11,18 +11,29 @@ export interface TimeSlot {
 export async function getAvailableSlots(
   barberId: string,
   date: Date,
-  workStart: string,  // "09:00"
-  workEnd: string,    // "18:00"
+  workStart: string,
+  workEnd: string,
 ): Promise<TimeSlot[]> {
-  // Normalize time format - DB may return "09:00:00", we need "09:00"
-  const normalizeTime = (t: string) => t.split(':').slice(0, 2).join(':');
-  const startNorm = normalizeTime(workStart);
-  const endNorm = normalizeTime(workEnd);
+  // Normalize time format - DB may return "09:00:00", we need HH and MM
+  const parseTime = (t: string) => {
+    const parts = t.split(':');
+    return { hours: parseInt(parts[0], 10), minutes: parseInt(parts[1], 10) };
+  };
+  const start = parseTime(workStart);
+  const end = parseTime(workEnd);
 
-  // Build date range in EST
-  const dateStr = date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-  const dayStart = new Date(`${dateStr}T${startNorm}:00-05:00`);
-  const dayEnd = new Date(`${dateStr}T${endNorm}:00-05:00`);
+  // Use the selected date's year/month/day directly
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+
+  // Create start/end in local time, then we'll work in UTC
+  const dayStart = new Date(year, month, day, start.hours, start.minutes, 0);
+  const dayEnd = new Date(year, month, day, end.hours, end.minutes, 0);
+
+  console.log('[slots] Date selected:', date.toISOString());
+  console.log('[slots] Work range:', dayStart.toISOString(), '→', dayEnd.toISOString());
+  console.log('[slots] workStart:', workStart, 'workEnd:', workEnd);
 
   // Generate all possible slots
   const slots: TimeSlot[] = [];
@@ -36,7 +47,13 @@ export async function getAvailableSlots(
     cursor = new Date(cursor.getTime() + SLOT_DURATION * 60000);
   }
 
+  console.log('[slots] Total slots generated:', slots.length);
+
   if (slots.length === 0) return [];
+
+  // Query range: full day
+  const queryStart = new Date(year, month, day, 0, 0, 0).toISOString();
+  const queryEnd = new Date(year, month, day, 23, 59, 59).toISOString();
 
   // Fetch confirmed appointments for this date
   const { data: appointments } = await supabase
@@ -44,16 +61,16 @@ export async function getAvailableSlots(
     .select('start_time, end_time')
     .eq('barber_id', barberId)
     .in('status', ['confirmed', 'rescheduled'])
-    .gte('start_time', dayStart.toISOString())
-    .lte('start_time', dayEnd.toISOString());
+    .gte('start_time', queryStart)
+    .lte('start_time', queryEnd);
 
   // Fetch blocked times for this date
   const { data: blockedTimes } = await supabase
     .from('blocked_times')
     .select('start_time, end_time')
     .eq('barber_id', barberId)
-    .lte('start_time', dayEnd.toISOString())
-    .gte('end_time', dayStart.toISOString());
+    .lte('start_time', queryEnd)
+    .gte('end_time', queryStart);
 
   // Fetch held slots that haven't expired
   const { data: heldSlots } = await supabase
@@ -61,12 +78,12 @@ export async function getAvailableSlots(
     .select('start_time, end_time, hold_expires_at, held_by_session_id')
     .eq('barber_id', barberId)
     .eq('status', 'held')
-    .gte('start_time', dayStart.toISOString())
-    .lte('start_time', dayEnd.toISOString());
+    .gte('start_time', queryStart)
+    .lte('start_time', queryEnd);
 
   const now = new Date();
 
-  return slots.map((slot) => {
+  const result = slots.map((slot) => {
     const sStart = slot.start.getTime();
     const sEnd = slot.end.getTime();
 
@@ -100,6 +117,11 @@ export async function getAvailableSlots(
 
     return slot;
   });
+
+  const available = result.filter(s => s.available).length;
+  console.log('[slots] Available:', available, '/ Total:', result.length);
+
+  return result;
 }
 
 export function generateCode(): string {
