@@ -6,7 +6,6 @@ import BottomNav from '@/components/BottomNav';
 import ClientDetailDialog from '@/components/ClientDetailDialog';
 import NewAppointmentDialog from '@/components/NewAppointmentDialog';
 import { Input } from '@/components/ui/input';
-import { Input } from '@/components/ui/input';
 import { Search, User, Phone } from 'lucide-react';
 
 const Clients = () => {
