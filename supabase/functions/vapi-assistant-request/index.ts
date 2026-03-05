@@ -125,9 +125,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    const calledNumber = body?.message?.call?.to;
+    const calledNumber =
+      body?.message?.phoneNumber?.number ||
+      body?.message?.call?.to ||
+      body?.message?.call?.phoneNumber?.number ||
+      null;
+
     if (!calledNumber) {
-      return new Response(JSON.stringify({ error: "Missing call.to number" }), {
+      console.error("Cannot determine called number. Full body:", JSON.stringify(body));
+      return new Response(JSON.stringify({ error: "Cannot determine called number" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
