@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ const DAYS = [
 const Onboarding = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
@@ -55,6 +57,7 @@ const Onboarding = () => {
       toast.error('Error al guardar: ' + error.message);
     } else {
       toast.success('¡Bienvenido a MamaCita!');
+      await queryClient.invalidateQueries({ queryKey: ['barber'] });
       navigate('/dashboard');
     }
   };
