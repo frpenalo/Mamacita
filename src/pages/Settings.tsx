@@ -49,6 +49,11 @@ const Settings = () => {
   const [blockReason, setBlockReason] = useState('');
   const [blockingSaving, setBlockingSaving] = useState(false);
 
+  // Vapi
+  const [vapiAssistantId, setVapiAssistantId] = useState('');
+  const [vapiPhoneNumberId, setVapiPhoneNumberId] = useState('');
+  const [vapiSaving, setVapiSaving] = useState(false);
+
   const { data: blockedTimes = [], refetch: refetchBlocked } = useQuery({
     queryKey: ['blocked-times', barber?.id],
     queryFn: async () => {
@@ -74,6 +79,8 @@ const Settings = () => {
       setWorkingDays(barber.working_days || []);
       setStartTime(barber.working_hours_start || '09:00');
       setEndTime(barber.working_hours_end || '18:00');
+      setVapiAssistantId((barber as any).vapi_assistant_id || '');
+      setVapiPhoneNumberId((barber as any).vapi_phone_number_id || '');
     }
   }, [barber]);
 
@@ -241,14 +248,36 @@ const Settings = () => {
           <Separator />
 
           {/* Placeholders */}
-          <div className="bg-card rounded-lg p-4 border border-border">
-            <div className="flex items-center gap-3">
-              <Phone className="h-5 w-5 text-primary" />
-              <div>
-                <p className="font-medium text-sm">Conectar Vapi</p>
-                <p className="text-xs text-muted-foreground">Próximamente</p>
-              </div>
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Phone className="h-5 w-5 text-primary" /> Conectar Vapi
+            </h2>
+            <div className="space-y-2">
+              <Label>Vapi Assistant ID</Label>
+              <Input value={vapiAssistantId} onChange={(e) => setVapiAssistantId(e.target.value)} placeholder="asst_xxxxxxxxxxxx" />
             </div>
+            <div className="space-y-2">
+              <Label>Vapi Phone Number ID</Label>
+              <Input value={vapiPhoneNumberId} onChange={(e) => setVapiPhoneNumberId(e.target.value)} placeholder="phn_xxxxxxxxxxxx" />
+            </div>
+            <Button
+              onClick={async () => {
+                if (!barber) return;
+                setVapiSaving(true);
+                const { error } = await supabase.from('barbers').update({
+                  vapi_assistant_id: vapiAssistantId || null,
+                  vapi_phone_number_id: vapiPhoneNumberId || null,
+                } as any).eq('id', barber.id);
+                setVapiSaving(false);
+                if (error) toast.error('Error al guardar Vapi');
+                else toast.success('Configuración Vapi guardada');
+              }}
+              variant="outline"
+              className="w-full border-primary text-primary"
+              disabled={vapiSaving}
+            >
+              {vapiSaving ? 'Guardando...' : 'Guardar configuración Vapi'}
+            </Button>
           </div>
           <div className="bg-card rounded-lg p-4 border border-border">
             <div className="flex items-center gap-3">

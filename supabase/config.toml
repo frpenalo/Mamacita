@@ -1,1 +1,10 @@
 project_id = "kpgseyfkucnnzdaoqjdq"
+
+[functions.vapi-assistant-request]
+verify_jwt = false
+
+[functions.vapi-end-of-call]
+verify_jwt = false
+
+[functions.vapi-create-appointment]
+verify_jwt = false
