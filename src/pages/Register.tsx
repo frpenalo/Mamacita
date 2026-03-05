@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Scissors } from 'lucide-react';
+import logoIcon from '@/assets/logo.ico';
 import { toast } from 'sonner';
 
 const Register = () => {
@@ -36,7 +36,7 @@ const Register = () => {
       <div className="w-full max-w-sm animate-fade-in">
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 mb-4">
-            <Scissors className="h-8 w-8 text-primary" />
+            <img src={logoIcon} alt="MamaCita" className="h-8 w-8" />
             <h1 className="text-3xl font-bold gold-text">MamaCita</h1>
           </div>
           <p className="text-lg font-medium text-foreground">Crea tu cuenta</p>
