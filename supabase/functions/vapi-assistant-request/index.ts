@@ -48,8 +48,10 @@ function getSlotsForDate(
   appointments: any[],
   blockedTimes: any[],
   heldSlots: any[],
-  now: Date
+  nowUTC: Date
 ): string[] {
+  const EST_OFFSET_MS = 5 * 60 * 60 * 1000;
+
   const parseTime = (t: string) => {
     const parts = t.split(":");
     return { hours: parseInt(parts[0], 10), minutes: parseInt(parts[1], 10) };
@@ -61,49 +63,57 @@ function getSlotsForDate(
   const month = date.getMonth();
   const day = date.getDate();
 
-  const dayStart = new Date(year, month, day, start.hours, start.minutes, 0);
-  const dayEnd = new Date(year, month, day, end.hours, end.minutes, 0);
+  // These dates represent EST wall-clock times but are created as UTC
+  // We need to add EST_OFFSET to get the actual UTC equivalent
+  const dayStartEST = new Date(Date.UTC(year, month, day, start.hours, start.minutes, 0));
+  const dayEndEST = new Date(Date.UTC(year, month, day, end.hours, end.minutes, 0));
 
-  const slots: { start: Date; end: Date }[] = [];
-  let cursor = new Date(dayStart);
-  while (cursor.getTime() + SLOT_DURATION * 60000 <= dayEnd.getTime()) {
+  const slots: { startEST: Date; endEST: Date; startUTC: Date; endUTC: Date }[] = [];
+  let cursor = dayStartEST.getTime();
+  while (cursor + SLOT_DURATION * 60000 <= dayEndEST.getTime()) {
+    const slotEndEST = cursor + SLOT_DURATION * 60000;
     slots.push({
-      start: new Date(cursor),
-      end: new Date(cursor.getTime() + SLOT_DURATION * 60000),
+      startEST: new Date(cursor),
+      endEST: new Date(slotEndEST),
+      startUTC: new Date(cursor + EST_OFFSET_MS),
+      endUTC: new Date(slotEndEST + EST_OFFSET_MS),
     });
-    cursor = new Date(cursor.getTime() + SLOT_DURATION * 60000);
+    cursor = slotEndEST;
   }
 
   const available: string[] = [];
   for (const slot of slots) {
-    const sStart = slot.start.getTime();
-    const sEnd = slot.end.getTime();
+    const sStartUTC = slot.startUTC.getTime();
+    const sEndUTC = slot.endUTC.getTime();
 
-    if (sStart < now.getTime()) continue;
+    // Filter out past slots
+    if (sStartUTC < nowUTC.getTime()) continue;
 
+    // Check appointments (stored in UTC)
     const hasAppt = appointments.some((a: any) => {
       const aStart = new Date(a.start_time).getTime();
       const aEnd = new Date(a.end_time).getTime();
-      return aStart < sEnd && aEnd > sStart;
+      return aStart < sEndUTC && aEnd > sStartUTC;
     });
     if (hasAppt) continue;
 
     const isBlocked = blockedTimes.some((b: any) => {
       const bStart = new Date(b.start_time).getTime();
       const bEnd = new Date(b.end_time).getTime();
-      return bStart < sEnd && bEnd > sStart;
+      return bStart < sEndUTC && bEnd > sStartUTC;
     });
     if (isBlocked) continue;
 
     const isHeld = heldSlots.some((h: any) => {
-      if (h.hold_expires_at && new Date(h.hold_expires_at).getTime() < now.getTime()) return false;
+      if (h.hold_expires_at && new Date(h.hold_expires_at).getTime() < nowUTC.getTime()) return false;
       const hStart = new Date(h.start_time).getTime();
       const hEnd = new Date(h.end_time).getTime();
-      return hStart < sEnd && hEnd > sStart;
+      return hStart < sEndUTC && hEnd > sStartUTC;
     });
     if (isHeld) continue;
 
-    available.push(formatTimeAMPM(slot.start));
+    // Display in EST (the startEST date has EST hours as UTC hours)
+    available.push(formatTimeAMPM(slot.startEST));
   }
 
   return available;
@@ -201,10 +211,8 @@ Deno.serve(async (req) => {
       .gte("start_time", queryStart)
       .lte("start_time", queryEnd);
 
-    const nowEST = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-
-    const todaySlots = getSlotsForDate(today, workStart, workEnd, appointments || [], blockedTimes || [], heldSlots || [], nowEST);
-    const tomorrowSlots = getSlotsForDate(tomorrow, workStart, workEnd, appointments || [], blockedTimes || [], heldSlots || [], nowEST);
+    const todaySlots = getSlotsForDate(today, workStart, workEnd, appointments || [], blockedTimes || [], heldSlots || [], now);
+    const tomorrowSlots = getSlotsForDate(tomorrow, workStart, workEnd, appointments || [], blockedTimes || [], heldSlots || [], now);
 
     let availableStr = "";
     if (todaySlots.length > 0) {
