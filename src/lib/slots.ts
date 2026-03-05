@@ -14,10 +14,15 @@ export async function getAvailableSlots(
   workStart: string,  // "09:00"
   workEnd: string,    // "18:00"
 ): Promise<TimeSlot[]> {
+  // Normalize time format - DB may return "09:00:00", we need "09:00"
+  const normalizeTime = (t: string) => t.split(':').slice(0, 2).join(':');
+  const startNorm = normalizeTime(workStart);
+  const endNorm = normalizeTime(workEnd);
+
   // Build date range in EST
   const dateStr = date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-  const dayStart = new Date(`${dateStr}T${workStart}:00-05:00`);
-  const dayEnd = new Date(`${dateStr}T${workEnd}:00-05:00`);
+  const dayStart = new Date(`${dateStr}T${startNorm}:00-05:00`);
+  const dayEnd = new Date(`${dateStr}T${endNorm}:00-05:00`);
 
   // Generate all possible slots
   const slots: TimeSlot[] = [];
