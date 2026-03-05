@@ -81,7 +81,7 @@ const Dashboard = () => {
       {/* Header */}
       <div className="px-4 pt-6 pb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <img src={logoIcon} alt="MamaCita" className="h-6 w-6" />
+          <img src={logoIcon} alt="MamaCita" className="h-10 w-10" />
           <span className="text-lg font-bold gold-text">MamaCita</span>
         </div>
         <div className="text-right">
