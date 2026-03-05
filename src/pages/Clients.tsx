@@ -3,12 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBarber } from '@/hooks/useBarber';
 import BottomNav from '@/components/BottomNav';
+import ClientDetailDialog from '@/components/ClientDetailDialog';
 import { Input } from '@/components/ui/input';
 import { Search, User, Phone } from 'lucide-react';
 
 const Clients = () => {
   const { data: barber } = useBarber();
   const [search, setSearch] = useState('');
+  const [selectedClient, setSelectedClient] = useState<any>(null);
 
   const { data: clients = [] } = useQuery({
     queryKey: ['clients', barber?.id],
@@ -58,7 +60,11 @@ const Clients = () => {
           </div>
         ) : (
           filtered.map((client: any) => (
-            <div key={client.id} className="bg-card rounded-lg p-4 border border-border">
+            <button
+              key={client.id}
+              onClick={() => setSelectedClient(client)}
+              className="w-full text-left bg-card rounded-lg p-4 border border-border hover:border-primary/30 transition-colors"
+            >
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center shrink-0">
                   <User className="h-5 w-5 text-primary" />
@@ -79,11 +85,12 @@ const Clients = () => {
                   </div>
                 </div>
               </div>
-            </div>
+            </button>
           ))
         )}
       </div>
 
+      <ClientDetailDialog open={!!selectedClient} onOpenChange={(v) => !v && setSelectedClient(null)} client={selectedClient} />
       <BottomNav />
     </div>
   );

@@ -3,9 +3,25 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBarber } from '@/hooks/useBarber';
 import BottomNav from '@/components/BottomNav';
-import { Button } from '@/components/ui/button';
 import { Scissors, Plus, Clock, User } from 'lucide-react';
 import NewAppointmentDialog from '@/components/NewAppointmentDialog';
+import AppointmentActions from '@/components/AppointmentActions';
+
+const statusColors: Record<string, string> = {
+  confirmed: 'bg-primary/20 text-primary',
+  completed: 'bg-green-500/20 text-green-400',
+  cancelled: 'bg-destructive/20 text-destructive',
+  no_show: 'bg-yellow-500/20 text-yellow-400',
+  rescheduled: 'bg-blue-400/20 text-blue-400',
+};
+
+const statusLabels: Record<string, string> = {
+  confirmed: 'Confirmada',
+  completed: 'Completada',
+  cancelled: 'Cancelada',
+  no_show: 'No Show',
+  rescheduled: 'Reagendada',
+};
 
 const Dashboard = () => {
   const { data: barber } = useBarber();
@@ -33,7 +49,7 @@ const Dashboard = () => {
     enabled: !!barber,
   });
 
-  const { data: upcomingAppointments = [] } = useQuery({
+  const { data: upcomingAppointments = [], refetch: refetchUpcoming } = useQuery({
     queryKey: ['appointments-upcoming', barber?.id],
     queryFn: async () => {
       if (!barber) return [];
@@ -42,6 +58,7 @@ const Dashboard = () => {
         .select('*, customers(name, phone_number)')
         .eq('barber_id', barber.id)
         .gt('start_time', todayEnd.toISOString())
+        .in('status', ['confirmed', 'rescheduled'])
         .order('start_time', { ascending: true })
         .limit(5);
       if (error) throw error;
@@ -50,13 +67,13 @@ const Dashboard = () => {
     enabled: !!barber,
   });
 
-  const formatTime = (dateStr: string) => {
-    return new Date(dateStr).toLocaleTimeString('es-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
-  };
+  const handleRefresh = () => { refetch(); refetchUpcoming(); };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('es-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/New_York' });
-  };
+  const formatTime = (dateStr: string) =>
+    new Date(dateStr).toLocaleTimeString('es-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York' });
+
+  const formatDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleDateString('es-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/New_York' });
 
   return (
     <div className="min-h-screen pb-20">
@@ -95,7 +112,18 @@ const Dashboard = () => {
                       <p className="text-xs text-muted-foreground">{formatTime(appt.start_time)}</p>
                     </div>
                   </div>
-                  <span className="text-xs text-muted-foreground font-mono">{appt.appointment_code}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-1 rounded-full ${statusColors[appt.status] || 'bg-secondary text-muted-foreground'}`}>
+                      {statusLabels[appt.status] || appt.status}
+                    </span>
+                    <AppointmentActions
+                      appointment={appt}
+                      barberId={barber!.id}
+                      barberStart={barber?.working_hours_start || '09:00'}
+                      barberEnd={barber?.working_hours_end || '18:00'}
+                      onUpdated={handleRefresh}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -117,9 +145,18 @@ const Dashboard = () => {
                     <p className="font-medium text-sm">{appt.customers?.name}</p>
                     <p className="text-xs text-muted-foreground">{formatDate(appt.start_time)} · {formatTime(appt.start_time)}</p>
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded-full ${appt.status === 'confirmed' ? 'bg-primary/20 text-primary' : 'bg-secondary text-muted-foreground'}`}>
-                    {appt.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-1 rounded-full ${statusColors[appt.status] || 'bg-secondary text-muted-foreground'}`}>
+                      {statusLabels[appt.status] || appt.status}
+                    </span>
+                    <AppointmentActions
+                      appointment={appt}
+                      barberId={barber!.id}
+                      barberStart={barber?.working_hours_start || '09:00'}
+                      barberEnd={barber?.working_hours_end || '18:00'}
+                      onUpdated={handleRefresh}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -135,7 +172,14 @@ const Dashboard = () => {
         <Plus className="h-6 w-6 text-primary-foreground" />
       </button>
 
-      <NewAppointmentDialog open={showNewAppt} onOpenChange={setShowNewAppt} barberId={barber?.id} onCreated={refetch} />
+      <NewAppointmentDialog
+        open={showNewAppt}
+        onOpenChange={setShowNewAppt}
+        barberId={barber?.id}
+        barberStart={barber?.working_hours_start || '09:00'}
+        barberEnd={barber?.working_hours_end || '18:00'}
+        onCreated={handleRefresh}
+      />
       <BottomNav />
     </div>
   );

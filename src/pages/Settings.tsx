@@ -1,16 +1,21 @@
 import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBarber } from '@/hooks/useBarber';
 import { useAuth } from '@/hooks/useAuth';
-import { useQueryClient } from '@tanstack/react-query';
 import BottomNav from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
-import { LogOut, Phone, MessageSquare } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { LogOut, Phone, MessageSquare, CalendarIcon, Ban, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const DAYS = [
   { id: 'lun', label: 'Lunes' },
@@ -36,6 +41,30 @@ const Settings = () => {
   const [endTime, setEndTime] = useState('18:00');
   const [saving, setSaving] = useState(false);
 
+  // Blocked times
+  const [blockStartDate, setBlockStartDate] = useState<Date | undefined>();
+  const [blockStartTime, setBlockStartTime] = useState('09:00');
+  const [blockEndDate, setBlockEndDate] = useState<Date | undefined>();
+  const [blockEndTime, setBlockEndTime] = useState('18:00');
+  const [blockReason, setBlockReason] = useState('');
+  const [blockingSaving, setBlockingSaving] = useState(false);
+
+  const { data: blockedTimes = [], refetch: refetchBlocked } = useQuery({
+    queryKey: ['blocked-times', barber?.id],
+    queryFn: async () => {
+      if (!barber) return [];
+      const { data, error } = await supabase
+        .from('blocked_times')
+        .select('*')
+        .eq('barber_id', barber.id)
+        .gte('end_time', new Date().toISOString())
+        .order('start_time', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!barber,
+  });
+
   useEffect(() => {
     if (barber) {
       setName(barber.name);
@@ -56,22 +85,41 @@ const Settings = () => {
     if (!barber) return;
     setSaving(true);
     const { error } = await supabase.from('barbers').update({
-      name,
-      shop_name: shopName,
-      address,
-      phone_number: phone,
-      working_days: workingDays,
-      working_hours_start: startTime,
-      working_hours_end: endTime,
+      name, shop_name: shopName, address, phone_number: phone,
+      working_days: workingDays, working_hours_start: startTime, working_hours_end: endTime,
     }).eq('id', barber.id);
     setSaving(false);
-    if (error) {
-      toast.error('Error al guardar');
-    } else {
-      toast.success('Configuración guardada');
-      queryClient.invalidateQueries({ queryKey: ['barber'] });
+    if (error) toast.error('Error al guardar');
+    else { toast.success('Configuración guardada'); queryClient.invalidateQueries({ queryKey: ['barber'] }); }
+  };
+
+  const handleBlock = async () => {
+    if (!barber || !blockStartDate || !blockEndDate) return;
+    setBlockingSaving(true);
+    const startStr = `${format(blockStartDate, 'yyyy-MM-dd')}T${blockStartTime}:00-05:00`;
+    const endStr = `${format(blockEndDate, 'yyyy-MM-dd')}T${blockEndTime}:00-05:00`;
+    const { error } = await supabase.from('blocked_times').insert({
+      barber_id: barber.id,
+      start_time: new Date(startStr).toISOString(),
+      end_time: new Date(endStr).toISOString(),
+      reason: blockReason || null,
+    });
+    setBlockingSaving(false);
+    if (error) toast.error('Error al bloquear');
+    else {
+      toast.success('Horario bloqueado');
+      setBlockStartDate(undefined); setBlockEndDate(undefined); setBlockReason('');
+      refetchBlocked();
     }
   };
+
+  const handleDeleteBlock = async (id: string) => {
+    const { error } = await supabase.from('blocked_times').delete().eq('id', id);
+    if (error) toast.error('Error al eliminar');
+    else { toast.success('Bloqueo eliminado'); refetchBlocked(); }
+  };
+
+  const formatBlockDate = (d: string) => new Date(d).toLocaleDateString('es-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
 
   return (
     <div className="min-h-screen pb-20">
@@ -124,6 +172,71 @@ const Settings = () => {
           <Button onClick={handleSave} className="w-full gold-gradient text-primary-foreground font-semibold" disabled={saving}>
             {saving ? 'Guardando...' : 'Guardar cambios'}
           </Button>
+
+          <Separator />
+
+          {/* Blocked times */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Ban className="h-5 w-5 text-primary" /> Bloquear horarios
+            </h2>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Fecha inicio</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className={cn("w-full justify-start text-xs", !blockStartDate && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-1 h-3 w-3" />
+                      {blockStartDate ? format(blockStartDate, "dd MMM", { locale: es }) : "Fecha"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={blockStartDate} onSelect={setBlockStartDate} initialFocus className="p-3 pointer-events-auto" />
+                  </PopoverContent>
+                </Popover>
+                <Input type="time" value={blockStartTime} onChange={(e) => setBlockStartTime(e.target.value)} className="text-xs h-8" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Fecha fin</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className={cn("w-full justify-start text-xs", !blockEndDate && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-1 h-3 w-3" />
+                      {blockEndDate ? format(blockEndDate, "dd MMM", { locale: es }) : "Fecha"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={blockEndDate} onSelect={setBlockEndDate} initialFocus className="p-3 pointer-events-auto" />
+                  </PopoverContent>
+                </Popover>
+                <Input type="time" value={blockEndTime} onChange={(e) => setBlockEndTime(e.target.value)} className="text-xs h-8" />
+              </div>
+            </div>
+
+            <Input placeholder="Motivo (opcional)" value={blockReason} onChange={(e) => setBlockReason(e.target.value)} />
+
+            <Button onClick={handleBlock} variant="outline" className="w-full border-primary text-primary" disabled={blockingSaving || !blockStartDate || !blockEndDate}>
+              {blockingSaving ? 'Bloqueando...' : 'Bloquear horario'}
+            </Button>
+
+            {blockedTimes.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wider">Bloqueos activos</Label>
+                {blockedTimes.map((bt: any) => (
+                  <div key={bt.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary border border-border">
+                    <div>
+                      <p className="text-sm">{formatBlockDate(bt.start_time)} — {formatBlockDate(bt.end_time)}</p>
+                      {bt.reason && <p className="text-xs text-muted-foreground">{bt.reason}</p>}
+                    </div>
+                    <button onClick={() => handleDeleteBlock(bt.id)} className="p-1.5 rounded-md hover:bg-destructive/20 transition-colors">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <Separator />
 
