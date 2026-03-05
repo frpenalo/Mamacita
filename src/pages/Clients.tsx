@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useBarber } from '@/hooks/useBarber';
 import BottomNav from '@/components/BottomNav';
 import ClientDetailDialog from '@/components/ClientDetailDialog';
+import NewAppointmentDialog from '@/components/NewAppointmentDialog';
 import { Input } from '@/components/ui/input';
 import { Search, User, Phone } from 'lucide-react';
 
@@ -11,6 +12,7 @@ const Clients = () => {
   const { data: barber } = useBarber();
   const [search, setSearch] = useState('');
   const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [showNewAppt, setShowNewAppt] = useState(false);
 
   const { data: clients = [] } = useQuery({
     queryKey: ['clients', barber?.id],
@@ -90,7 +92,23 @@ const Clients = () => {
         )}
       </div>
 
-      <ClientDetailDialog open={!!selectedClient} onOpenChange={(v) => !v && setSelectedClient(null)} client={selectedClient} />
+      <ClientDetailDialog
+        open={!!selectedClient}
+        onOpenChange={(v) => !v && setSelectedClient(null)}
+        client={selectedClient}
+        onCreateAppointment={() => {
+          setSelectedClient(null);
+          setShowNewAppt(true);
+        }}
+      />
+      <NewAppointmentDialog
+        open={showNewAppt}
+        onOpenChange={setShowNewAppt}
+        barberId={barber?.id}
+        barberStart={barber?.working_hours_start || '09:00'}
+        barberEnd={barber?.working_hours_end || '18:00'}
+        onCreated={() => setShowNewAppt(false)}
+      />
       <BottomNav />
     </div>
   );

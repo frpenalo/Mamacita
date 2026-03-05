@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { User, Phone, Calendar, Clock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { User, Phone, Calendar, Clock, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -9,6 +10,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   client: any;
+  onCreateAppointment?: (client: any) => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -27,7 +29,7 @@ const statusLabels: Record<string, string> = {
   rescheduled: 'Reagendada',
 };
 
-const ClientDetailDialog = ({ open, onOpenChange, client }: Props) => {
+const ClientDetailDialog = ({ open, onOpenChange, client, onCreateAppointment }: Props) => {
   const { data: appointments = [] } = useQuery({
     queryKey: ['client-appointments', client?.id],
     queryFn: async () => {
@@ -71,6 +73,15 @@ const ClientDetailDialog = ({ open, onOpenChange, client }: Props) => {
               <p className="text-xs text-muted-foreground">{client.total_visits || 0} visitas</p>
             </div>
           </div>
+
+          {onCreateAppointment && (
+            <Button
+              onClick={() => onCreateAppointment(client)}
+              className="w-full gold-gradient text-primary-foreground font-semibold"
+            >
+              <Plus className="mr-2 h-4 w-4" /> Crear cita
+            </Button>
+          )}
 
           {/* Appointments */}
           <div>
