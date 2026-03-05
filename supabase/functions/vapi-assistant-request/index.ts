@@ -8,9 +8,57 @@ const corsHeaders = {
 
 const SLOT_DURATION = 45; // minutes
 
-function formatTimeAMPM(date: Date): string {
-  let hours = date.getHours();
-  const minutes = date.getMinutes();
+/**
+ * Get current date/time in a specific IANA timezone using Intl.DateTimeFormat.
+ * Returns { year, month, day, hours, minutes, seconds } in that timezone.
+ */
+function getDatePartsInTZ(date: Date, tz: string) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value || "0", 10);
+  return {
+    year: get("year"),
+    month: get("month"), // 1-indexed
+    day: get("day"),
+    hours: get("hour") === 24 ? 0 : get("hour"),
+    minutes: get("minute"),
+    seconds: get("second"),
+  };
+}
+
+/**
+ * Create a UTC Date that represents a specific wall-clock time in a timezone.
+ * E.g., "9:00 AM EST" → the UTC instant when it's 9:00 in EST.
+ */
+function wallClockToUTC(year: number, month: number, day: number, hours: number, minutes: number, tz: string): Date {
+  // Create a date string and use the timezone to find the UTC offset
+  const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`;
+  // Use a trick: format a known UTC date in the target TZ to find the offset
+  const testDate = new Date(dateStr + "Z"); // treat as UTC first
+  const inTZ = getDatePartsInTZ(testDate, tz);
+  // The difference between what we wanted and what we got tells us the offset
+  const wantedMinutes = hours * 60 + minutes;
+  const gotMinutes = inTZ.hours * 60 + inTZ.minutes;
+  let offsetMinutes = gotMinutes - wantedMinutes;
+  // Handle day boundary
+  if (offsetMinutes > 720) offsetMinutes -= 1440;
+  if (offsetMinutes < -720) offsetMinutes += 1440;
+  return new Date(testDate.getTime() - offsetMinutes * 60000);
+}
+
+function formatTimeAMPM(date: Date, tz: string): string {
+  const parts = getDatePartsInTZ(date, tz);
+  let hours = parts.hours;
+  const minutes = parts.minutes;
   const ampm = hours >= 12 ? "PM" : "AM";
   hours = hours % 12 || 12;
   const minStr = minutes < 10 ? `0${minutes}` : `${minutes}`;
@@ -42,13 +90,16 @@ function formatWorkingDays(days: string[] | null): string {
 }
 
 function getSlotsForDate(
-  date: Date,
+  year: number,
+  month: number,
+  day: number,
   workStart: string,
   workEnd: string,
   appointments: any[],
   blockedTimes: any[],
   heldSlots: any[],
-  now: Date
+  nowUTC: Date,
+  tz: string
 ): string[] {
   const parseTime = (t: string) => {
     const parts = t.split(":");
@@ -57,29 +108,30 @@ function getSlotsForDate(
 
   const start = parseTime(workStart);
   const end = parseTime(workEnd);
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const day = date.getDate();
 
-  const dayStart = new Date(year, month, day, start.hours, start.minutes, 0);
-  const dayEnd = new Date(year, month, day, end.hours, end.minutes, 0);
+  // Convert wall-clock work hours to UTC instants
+  const dayStartUTC = wallClockToUTC(year, month, day, start.hours, start.minutes, tz);
+  const dayEndUTC = wallClockToUTC(year, month, day, end.hours, end.minutes, tz);
 
-  const slots: { start: Date; end: Date }[] = [];
-  let cursor = new Date(dayStart);
-  while (cursor.getTime() + SLOT_DURATION * 60000 <= dayEnd.getTime()) {
+  const slots: { startUTC: Date; endUTC: Date }[] = [];
+  let cursor = dayStartUTC.getTime();
+  const slotMs = SLOT_DURATION * 60000;
+  while (cursor + slotMs <= dayEndUTC.getTime()) {
     slots.push({
-      start: new Date(cursor),
-      end: new Date(cursor.getTime() + SLOT_DURATION * 60000),
+      startUTC: new Date(cursor),
+      endUTC: new Date(cursor + slotMs),
     });
-    cursor = new Date(cursor.getTime() + SLOT_DURATION * 60000);
+    cursor += slotMs;
   }
 
   const available: string[] = [];
-  for (const slot of slots) {
-    const sStart = slot.start.getTime();
-    const sEnd = slot.end.getTime();
+  const nowMs = nowUTC.getTime();
 
-    if (sStart < now.getTime()) continue;
+  for (const slot of slots) {
+    const sStart = slot.startUTC.getTime();
+    const sEnd = slot.endUTC.getTime();
+
+    if (sStart < nowMs) continue;
 
     const hasAppt = appointments.some((a: any) => {
       const aStart = new Date(a.start_time).getTime();
@@ -96,14 +148,14 @@ function getSlotsForDate(
     if (isBlocked) continue;
 
     const isHeld = heldSlots.some((h: any) => {
-      if (h.hold_expires_at && new Date(h.hold_expires_at).getTime() < now.getTime()) return false;
+      if (h.hold_expires_at && new Date(h.hold_expires_at).getTime() < nowMs) return false;
       const hStart = new Date(h.start_time).getTime();
       const hEnd = new Date(h.end_time).getTime();
       return hStart < sEnd && hEnd > sStart;
     });
     if (isHeld) continue;
 
-    available.push(formatTimeAMPM(slot.start));
+    available.push(formatTimeAMPM(slot.startUTC, tz));
   }
 
   return available;
@@ -144,7 +196,6 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Find barber by phone number
     const { data: barber, error: barberError } = await supabase
       .from("barbers")
       .select("*")
@@ -160,20 +211,24 @@ Deno.serve(async (req) => {
 
     const workStart = barber.working_hours_start || "09:00";
     const workEnd = barber.working_hours_end || "18:00";
+    const tz = barber.timezone || "America/New_York";
 
-    // Get today and tomorrow in EST
-    const now = new Date();
-    // We work with UTC dates but the slot generation uses local constructor
-    // For EST calculations we offset
-    const today = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const nowUTC = new Date();
+    const nowParts = getDatePartsInTZ(nowUTC, tz);
 
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+    const todayYear = nowParts.year;
+    const todayMonth = nowParts.month;
+    const todayDay = nowParts.day;
 
-    const queryStart = `${todayStr}T00:00:00`;
-    const queryEnd = `${tomorrowStr}T23:59:59`;
+    // Tomorrow
+    const tomorrowDate = new Date(wallClockToUTC(todayYear, todayMonth, todayDay, 12, 0, tz).getTime() + 24 * 60 * 60 * 1000);
+    const tomorrowParts = getDatePartsInTZ(tomorrowDate, tz);
+
+    // Query range: from start of today to end of tomorrow in UTC
+    const queryStartUTC = wallClockToUTC(todayYear, todayMonth, todayDay, 0, 0, tz).toISOString();
+    const queryEndUTC = wallClockToUTC(tomorrowParts.year, tomorrowParts.month, tomorrowParts.day, 23, 59, tz).toISOString();
+
+    console.log(`[assistant-request] TZ: ${tz}, Today: ${todayYear}-${todayMonth}-${todayDay}, Query: ${queryStartUTC} → ${queryEndUTC}`);
 
     // Fetch appointments
     const { data: appointments } = await supabase
@@ -181,16 +236,18 @@ Deno.serve(async (req) => {
       .select("start_time, end_time")
       .eq("barber_id", barber.id)
       .in("status", ["confirmed", "rescheduled"])
-      .gte("start_time", queryStart)
-      .lte("start_time", queryEnd);
+      .gte("start_time", queryStartUTC)
+      .lte("start_time", queryEndUTC);
+
+    console.log(`[assistant-request] Found ${appointments?.length || 0} appointments`);
 
     // Fetch blocked times
     const { data: blockedTimes } = await supabase
       .from("blocked_times")
       .select("start_time, end_time")
       .eq("barber_id", barber.id)
-      .lte("start_time", queryEnd)
-      .gte("end_time", queryStart);
+      .lte("start_time", queryEndUTC)
+      .gte("end_time", queryStartUTC);
 
     // Fetch held slots
     const { data: heldSlots } = await supabase
@@ -198,13 +255,11 @@ Deno.serve(async (req) => {
       .select("start_time, end_time, hold_expires_at, held_by_session_id")
       .eq("barber_id", barber.id)
       .eq("status", "held")
-      .gte("start_time", queryStart)
-      .lte("start_time", queryEnd);
+      .gte("start_time", queryStartUTC)
+      .lte("start_time", queryEndUTC);
 
-    const nowEST = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-
-    const todaySlots = getSlotsForDate(today, workStart, workEnd, appointments || [], blockedTimes || [], heldSlots || [], nowEST);
-    const tomorrowSlots = getSlotsForDate(tomorrow, workStart, workEnd, appointments || [], blockedTimes || [], heldSlots || [], nowEST);
+    const todaySlots = getSlotsForDate(todayYear, todayMonth, todayDay, workStart, workEnd, appointments || [], blockedTimes || [], heldSlots || [], nowUTC, tz);
+    const tomorrowSlots = getSlotsForDate(tomorrowParts.year, tomorrowParts.month, tomorrowParts.day, workStart, workEnd, appointments || [], blockedTimes || [], heldSlots || [], nowUTC, tz);
 
     let availableStr = "";
     if (todaySlots.length > 0) {
@@ -218,10 +273,10 @@ Deno.serve(async (req) => {
       availableStr = "No hay horarios disponibles hoy ni mañana";
     }
 
+    console.log(`[assistant-request] Available slots: ${availableStr}`);
+
     const vapiAssistantId = barber.vapi_assistant_id;
 
-    // Build response: if barber has a Vapi assistant configured, use it with overrides
-    // Otherwise return a full assistant object (will likely not work well without model config)
     const variableValues = {
       shop_name: barber.shop_name,
       barber_name: barber.name,
@@ -236,13 +291,11 @@ Deno.serve(async (req) => {
     const response: any = {};
 
     if (vapiAssistantId) {
-      // Use existing assistant with variable overrides
       response.assistantId = vapiAssistantId;
       response.assistantOverrides = {
         variableValues,
       };
     } else {
-      // Fallback: full assistant definition (requires model/voice config in Vapi)
       response.assistant = {
         firstMessage: `Hola, gracias por llamar a ${barber.shop_name}. ¿Te gustaría agendar una cita?`,
         variableValues,
