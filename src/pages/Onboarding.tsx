@@ -69,6 +69,13 @@ const Onboarding = () => {
 
     if (error) {
       setLoading(false);
+      // Detect stale session (user deleted from auth.users)
+      if (error.code === '23503' && error.message.includes('barbers_user_id_fkey')) {
+        toast.error('Tu sesión es inválida. Cerrando sesión...');
+        await supabase.auth.signOut();
+        navigate('/login');
+        return;
+      }
       toast.error('Error al guardar: ' + error.message);
       return;
     }
