@@ -45,9 +45,19 @@ const Onboarding = () => {
     if (!user) return;
     setLoading(true);
 
+    // Re-fetch session to ensure we have a valid user_id
+    const { data: { session } } = await supabase.auth.getSession();
+    const currentUserId = session?.user?.id;
+    if (!currentUserId) {
+      setLoading(false);
+      toast.error('Sesión expirada. Por favor inicia sesión nuevamente.');
+      navigate('/login');
+      return;
+    }
+
     // 1. Create barber record
     const { data: barberData, error } = await supabase.from('barbers').insert({
-      user_id: user.id,
+      user_id: currentUserId,
       name,
       shop_name: shopName,
       address,
