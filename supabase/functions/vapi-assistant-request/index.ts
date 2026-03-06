@@ -228,7 +228,12 @@ Deno.serve(async (req) => {
     const queryStartUTC = wallClockToUTC(todayYear, todayMonth, todayDay, 0, 0, tz).toISOString();
     const queryEndUTC = wallClockToUTC(tomorrowParts.year, tomorrowParts.month, tomorrowParts.day, 23, 59, tz).toISOString();
 
-    console.log(`[assistant-request] TZ: ${tz}, Today: ${todayYear}-${todayMonth}-${todayDay}, Query: ${queryStartUTC} → ${queryEndUTC}`);
+    console.log(`[assistant-request] TZ: ${tz}, Now UTC: ${nowUTC.toISOString()}`);
+    console.log(`[assistant-request] Today (in TZ): ${todayYear}-${todayMonth}-${todayDay}`);
+    console.log(`[assistant-request] Tomorrow (in TZ): ${tomorrowParts.year}-${tomorrowParts.month}-${tomorrowParts.day}`);
+    console.log(`[assistant-request] tomorrowDate UTC: ${tomorrowDate.toISOString()}`);
+    console.log(`[assistant-request] Query range: ${queryStartUTC} → ${queryEndUTC}`);
+    console.log(`[assistant-request] Work hours: ${workStart} - ${workEnd}, Working days: ${JSON.stringify(barber.working_days)}`);
 
     // Fetch appointments
     const { data: appointments } = await supabase
@@ -240,6 +245,9 @@ Deno.serve(async (req) => {
       .lte("start_time", queryEndUTC);
 
     console.log(`[assistant-request] Found ${appointments?.length || 0} appointments`);
+    if (appointments && appointments.length > 0) {
+      console.log(`[assistant-request] Appointments:`, JSON.stringify(appointments.map(a => ({ start: a.start_time, end: a.end_time }))));
+    }
 
     // Fetch blocked times
     const { data: blockedTimes } = await supabase
@@ -248,6 +256,11 @@ Deno.serve(async (req) => {
       .eq("barber_id", barber.id)
       .lte("start_time", queryEndUTC)
       .gte("end_time", queryStartUTC);
+
+    console.log(`[assistant-request] Found ${blockedTimes?.length || 0} blocked times`);
+    if (blockedTimes && blockedTimes.length > 0) {
+      console.log(`[assistant-request] Blocked times:`, JSON.stringify(blockedTimes));
+    }
 
     // Fetch held slots
     const { data: heldSlots } = await supabase
@@ -258,8 +271,12 @@ Deno.serve(async (req) => {
       .gte("start_time", queryStartUTC)
       .lte("start_time", queryEndUTC);
 
+    console.log(`[assistant-request] Found ${heldSlots?.length || 0} held slots`);
+
     const todaySlots = getSlotsForDate(todayYear, todayMonth, todayDay, workStart, workEnd, appointments || [], blockedTimes || [], heldSlots || [], nowUTC, tz);
     const tomorrowSlots = getSlotsForDate(tomorrowParts.year, tomorrowParts.month, tomorrowParts.day, workStart, workEnd, appointments || [], blockedTimes || [], heldSlots || [], nowUTC, tz);
+
+    console.log(`[assistant-request] Today slots: ${todaySlots.length} available, Tomorrow slots: ${tomorrowSlots.length} available`);
 
     let availableStr = "";
     if (todaySlots.length > 0) {
