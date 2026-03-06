@@ -44,7 +44,9 @@ const Onboarding = () => {
   const handleSubmit = async () => {
     if (!user) return;
     setLoading(true);
-    const { error } = await supabase.from('barbers').insert({
+
+    // 1. Create barber record
+    const { data: barberData, error } = await supabase.from('barbers').insert({
       user_id: user.id,
       name,
       shop_name: shopName,
@@ -53,15 +55,46 @@ const Onboarding = () => {
       working_days: workingDays,
       working_hours_start: startTime,
       working_hours_end: endTime,
-    });
-    setLoading(false);
+    }).select('id').single();
+
     if (error) {
+      setLoading(false);
       toast.error('Error al guardar: ' + error.message);
-    } else {
-      toast.success('¡Bienvenido a MamaCita!');
-      await queryClient.invalidateQueries({ queryKey: ['barber'] });
-      navigate('/dashboard');
+      return;
     }
+
+    // 2. Buy Vapi phone number
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      const res = await supabase.functions.invoke('vapi-buy-number', {
+        body: { barber_id: barberData.id, shop_name: shopName },
+      });
+
+      if (res.error) {
+        console.error('Vapi buy number error:', res.error);
+        toast.error('Registro exitoso, pero no se pudo asignar número de teléfono.');
+      } else {
+        const phoneNumber = res.data?.phone_number;
+        if (phoneNumber) {
+          setAssignedPhone(phoneNumber);
+        }
+      }
+    } catch (e) {
+      console.error('Vapi buy number exception:', e);
+      toast.error('Registro exitoso, pero no se pudo asignar número de teléfono.');
+    }
+
+    setLoading(false);
+    toast.success('¡Bienvenido a MamaCita!');
+    await queryClient.invalidateQueries({ queryKey: ['barber'] });
+
+    // If we got a phone number, show step 4 (confirmation). Otherwise go to dashboard.
+    if (!assignedPhone) {
+      // Check if phone was set in the response above (state might not be updated yet)
+      // We handle this by going to step 4 always after success
+    }
+    setStep(4);
   };
 
   return (
