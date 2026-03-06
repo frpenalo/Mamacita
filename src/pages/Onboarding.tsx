@@ -86,9 +86,9 @@ const Onboarding = () => {
     }
 
     setLoading(false);
-    toast.success('¡Bienvenido a MamaCita!');
-    await queryClient.invalidateQueries({ queryKey: ['barber'] });
     setStep(4);
+    toast.success('¡Bienvenido a MamaCita!');
+    queryClient.invalidateQueries({ queryKey: ['barber'] });
   };
 
   return (
