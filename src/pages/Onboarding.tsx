@@ -80,28 +80,6 @@ const Onboarding = () => {
       return;
     }
 
-    // 2. Buy Vapi phone number
-    let gotPhone = false;
-    try {
-      const res = await supabase.functions.invoke('vapi-buy-number', {
-        body: { barber_id: barberData.id, shop_name: shopName },
-      });
-
-      if (res.error) {
-        console.error('Vapi buy number error:', res.error);
-        toast.error('Registro exitoso, pero no se pudo asignar número de teléfono.');
-      } else {
-        const phoneNumber = res.data?.phone_number;
-        if (phoneNumber) {
-          setAssignedPhone(phoneNumber);
-          gotPhone = true;
-        }
-      }
-    } catch (e) {
-      console.error('Vapi buy number exception:', e);
-      toast.error('Registro exitoso, pero no se pudo asignar número de teléfono.');
-    }
-
     setLoading(false);
     setStep(4);
     toast.success('¡Bienvenido a MamaCita!');
