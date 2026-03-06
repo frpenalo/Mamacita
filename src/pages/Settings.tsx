@@ -247,11 +247,51 @@ const Settings = () => {
 
           <Separator />
 
-          {/* Placeholders */}
+          {/* Vapi Section */}
           <div className="space-y-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Phone className="h-5 w-5 text-primary" /> Conectar Vapi
+              <Phone className="h-5 w-5 text-primary" /> Teléfono MamaCita
             </h2>
+            {barber?.phone_number && (barber as any).vapi_phone_number_id ? (
+              <div className="bg-secondary p-4 rounded-lg">
+                <p className="text-sm text-muted-foreground">Tu número asignado:</p>
+                <p className="text-lg font-bold gold-text">{barber.phone_number}</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">No tienes un número de MamaCita asignado aún.</p>
+                <Button
+                  onClick={async () => {
+                    if (!barber) return;
+                    setVapiSaving(true);
+                    try {
+                      const res = await supabase.functions.invoke('vapi-buy-number', {
+                        body: { barber_id: barber.id, shop_name: barber.shop_name },
+                      });
+                      if (res.error) {
+                        toast.error('Error al comprar número: ' + (res.error.message || 'Error desconocido'));
+                      } else if (res.data?.phone_number) {
+                        toast.success(`¡Número asignado: ${res.data.phone_number}!`);
+                        queryClient.invalidateQueries({ queryKey: ['barber'] });
+                      } else {
+                        toast.success('Número comprado. Se asignará en breve.');
+                        queryClient.invalidateQueries({ queryKey: ['barber'] });
+                      }
+                    } catch (e: any) {
+                      toast.error('Error: ' + e.message);
+                    }
+                    setVapiSaving(false);
+                  }}
+                  className="w-full gold-gradient text-primary-foreground font-semibold"
+                  disabled={vapiSaving}
+                >
+                  {vapiSaving ? 'Comprando número...' : 'Comprar número de teléfono'}
+                </Button>
+              </div>
+            )}
+            
+            <Separator className="my-2" />
+            
             <div className="space-y-2">
               <Label>Vapi Assistant ID</Label>
               <Input value={vapiAssistantId} onChange={(e) => setVapiAssistantId(e.target.value)} placeholder="asst_xxxxxxxxxxxx" />
@@ -270,7 +310,7 @@ const Settings = () => {
                 } as any).eq('id', barber.id);
                 setVapiSaving(false);
                 if (error) toast.error('Error al guardar Vapi');
-                else toast.success('Configuración Vapi guardada');
+                else { toast.success('Configuración Vapi guardada'); queryClient.invalidateQueries({ queryKey: ['barber'] }); }
               }}
               variant="outline"
               className="w-full border-primary text-primary"

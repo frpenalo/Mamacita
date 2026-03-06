@@ -75,8 +75,10 @@ serve(async (req) => {
     }
 
     // Extract the phone number (E164) and vapi IDs
-    const phoneNumber = vapiData.number; // e.g. "+19844779370"
+    // Vapi returns phoneNumber (not number) for the E164 formatted number
+    const phoneNumber = vapiData.phoneNumber || vapiData.number || null;
     const vapiPhoneNumberId = vapiData.id;
+    console.log(`[vapi-buy-number] Extracted phoneNumber: ${phoneNumber}, id: ${vapiPhoneNumberId}`);
 
     // Update barber record with service role client
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
