@@ -98,7 +98,8 @@ const Onboarding = () => {
     setLoading(false);
     setStep(4);
     toast.success('¡Bienvenido a MamaCita!');
-    queryClient.invalidateQueries({ queryKey: ['barber'] });
+    // Pre-populate the cache so OnboardingGuard doesn't redirect back
+    await queryClient.refetchQueries({ queryKey: ['barber'] });
   };
 
   return (
