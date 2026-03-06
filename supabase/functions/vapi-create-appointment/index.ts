@@ -259,6 +259,44 @@ Deno.serve(async (req) => {
 
     console.log(`[create-appt] Appointment created: ${appointmentCode} at ${startDate.toISOString()}`);
 
+    // 5. Send WhatsApp confirmations
+    try {
+      const { data: barberData } = await supabase
+        .from("barbers")
+        .select("name, shop_name, whatsapp_number, phone_number")
+        .eq("id", barber_id)
+        .maybeSingle();
+
+      const barberPhone = barberData?.whatsapp_number || barberData?.phone_number || null;
+
+      const whatsappPayload = {
+        customer_phone,
+        customer_name,
+        shop_name: barberData?.shop_name || "",
+        barber_name: barberData?.name || "",
+        barber_phone: barberPhone,
+        start_time: startDate.toISOString(),
+        appointment_code: appointmentCode,
+      };
+
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+      const waRes = await fetch(`${supabaseUrl}/functions/v1/send-whatsapp-confirmation`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify(whatsappPayload),
+      });
+
+      const waData = await waRes.json();
+      console.log(`[create-appt] WhatsApp result:`, JSON.stringify(waData));
+    } catch (waErr) {
+      console.error(`[create-appt] WhatsApp notification failed (non-blocking):`, waErr);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
