@@ -84,6 +84,25 @@ const DAY_LABELS: Record<string, string> = {
   dom: "Domingo",
 };
 
+// Maps JS getDay() (0=Sun) to working_days keys
+const JS_DAY_TO_KEY: Record<number, string> = {
+  0: "dom",
+  1: "lun",
+  2: "mar",
+  3: "mie",
+  4: "jue",
+  5: "vie",
+  6: "sab",
+};
+
+function getDayOfWeekInTZ(year: number, month: number, day: number, tz: string): number {
+  const d = wallClockToUTC(year, month, day, 12, 0, tz);
+  const formatter = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" });
+  const wd = formatter.format(d);
+  const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return map[wd] ?? 0;
+}
+
 function formatWorkingDays(days: string[] | null): string {
   if (!days || days.length === 0) return "No configurado";
   return days.map((d) => DAY_LABELS[d] || d).join(", ");
