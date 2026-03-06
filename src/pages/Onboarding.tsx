@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowRight, ArrowLeft, Check } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, Phone, Copy } from 'lucide-react';
 import logoIcon from '@/assets/logo.ico';
 import { toast } from 'sonner';
 
@@ -27,6 +27,7 @@ const Onboarding = () => {
   const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [assignedPhone, setAssignedPhone] = useState<string | null>(null);
 
   const [name, setName] = useState('');
   const [shopName, setShopName] = useState('');
@@ -43,7 +44,9 @@ const Onboarding = () => {
   const handleSubmit = async () => {
     if (!user) return;
     setLoading(true);
-    const { error } = await supabase.from('barbers').insert({
+
+    // 1. Create barber record
+    const { data: barberData, error } = await supabase.from('barbers').insert({
       user_id: user.id,
       name,
       shop_name: shopName,
@@ -52,15 +55,40 @@ const Onboarding = () => {
       working_days: workingDays,
       working_hours_start: startTime,
       working_hours_end: endTime,
-    });
-    setLoading(false);
+    }).select('id').single();
+
     if (error) {
+      setLoading(false);
       toast.error('Error al guardar: ' + error.message);
-    } else {
-      toast.success('¡Bienvenido a MamaCita!');
-      await queryClient.invalidateQueries({ queryKey: ['barber'] });
-      navigate('/dashboard');
+      return;
     }
+
+    // 2. Buy Vapi phone number
+    let gotPhone = false;
+    try {
+      const res = await supabase.functions.invoke('vapi-buy-number', {
+        body: { barber_id: barberData.id, shop_name: shopName },
+      });
+
+      if (res.error) {
+        console.error('Vapi buy number error:', res.error);
+        toast.error('Registro exitoso, pero no se pudo asignar número de teléfono.');
+      } else {
+        const phoneNumber = res.data?.phone_number;
+        if (phoneNumber) {
+          setAssignedPhone(phoneNumber);
+          gotPhone = true;
+        }
+      }
+    } catch (e) {
+      console.error('Vapi buy number exception:', e);
+      toast.error('Registro exitoso, pero no se pudo asignar número de teléfono.');
+    }
+
+    setLoading(false);
+    toast.success('¡Bienvenido a MamaCita!');
+    await queryClient.invalidateQueries({ queryKey: ['barber'] });
+    setStep(4);
   };
 
   return (
@@ -72,8 +100,8 @@ const Onboarding = () => {
             <span className="text-xl font-bold gold-text">MamaCita</span>
           </div>
           <div className="flex justify-center gap-2 mt-4">
-            {[1, 2, 3].map((s) => (
-              <div key={s} className={`h-1.5 w-12 rounded-full transition-colors ${s <= step ? 'gold-gradient' : 'bg-secondary'}`} />
+            {[1, 2, 3, 4].map((s) => (
+              <div key={s} className={`h-1.5 w-10 rounded-full transition-colors ${s <= step ? 'gold-gradient' : 'bg-secondary'}`} />
             ))}
           </div>
         </div>
@@ -157,6 +185,45 @@ const Onboarding = () => {
                 <Check className="mr-2 h-4 w-4" /> {loading ? 'Guardando...' : 'Comenzar'}
               </Button>
             </div>
+          </div>
+        )}
+
+        {step === 4 && (
+          <div className="space-y-6 text-center">
+            <div className="flex justify-center">
+              <div className="h-16 w-16 rounded-full gold-gradient flex items-center justify-center">
+                <Check className="h-8 w-8 text-primary-foreground" />
+              </div>
+            </div>
+            <h2 className="text-xl font-semibold">¡Todo listo!</h2>
+            {assignedPhone ? (
+              <div className="space-y-3">
+                <p className="text-muted-foreground text-sm">Tu número de MamaCita es:</p>
+                <div className="flex items-center justify-center gap-2 bg-secondary p-4 rounded-lg">
+                  <Phone className="h-5 w-5 text-primary" />
+                  <span className="text-lg font-bold gold-text">{assignedPhone}</span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(assignedPhone);
+                      toast.success('Número copiado');
+                    }}
+                    className="ml-1 p-1 rounded hover:bg-muted transition-colors"
+                  >
+                    <Copy className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </div>
+                <p className="text-muted-foreground text-sm">
+                  Compártelo con tus clientes para que puedan agendar citas automáticamente.
+                </p>
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                Tu cuenta ha sido creada exitosamente. El número de teléfono será asignado pronto.
+              </p>
+            )}
+            <Button onClick={() => navigate('/dashboard')} className="w-full gold-gradient text-primary-foreground font-semibold">
+              Ir al Dashboard <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
           </div>
         )}
       </div>
