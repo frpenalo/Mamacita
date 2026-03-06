@@ -84,6 +84,11 @@ const DAY_LABELS: Record<string, string> = {
   dom: "Domingo",
 };
 
+const MONTH_LABELS: string[] = [
+  "", "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
 // Maps JS getDay() (0=Sun) to working_days keys
 const JS_DAY_TO_KEY: Record<number, string> = {
   0: "dom",
