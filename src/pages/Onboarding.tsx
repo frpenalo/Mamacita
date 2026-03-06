@@ -64,9 +64,8 @@ const Onboarding = () => {
     }
 
     // 2. Buy Vapi phone number
+    let gotPhone = false;
     try {
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
       const res = await supabase.functions.invoke('vapi-buy-number', {
         body: { barber_id: barberData.id, shop_name: shopName },
       });
@@ -78,6 +77,7 @@ const Onboarding = () => {
         const phoneNumber = res.data?.phone_number;
         if (phoneNumber) {
           setAssignedPhone(phoneNumber);
+          gotPhone = true;
         }
       }
     } catch (e) {
@@ -88,12 +88,6 @@ const Onboarding = () => {
     setLoading(false);
     toast.success('¡Bienvenido a MamaCita!');
     await queryClient.invalidateQueries({ queryKey: ['barber'] });
-
-    // If we got a phone number, show step 4 (confirmation). Otherwise go to dashboard.
-    if (!assignedPhone) {
-      // Check if phone was set in the response above (state might not be updated yet)
-      // We handle this by going to step 4 always after success
-    }
     setStep(4);
   };
 
