@@ -106,8 +106,8 @@ const Onboarding = () => {
             <span className="text-xl font-bold gold-text">MamaCita</span>
           </div>
           <div className="flex justify-center gap-2 mt-4">
-            {[1, 2, 3].map((s) => (
-              <div key={s} className={`h-1.5 w-12 rounded-full transition-colors ${s <= step ? 'gold-gradient' : 'bg-secondary'}`} />
+            {[1, 2, 3, 4].map((s) => (
+              <div key={s} className={`h-1.5 w-10 rounded-full transition-colors ${s <= step ? 'gold-gradient' : 'bg-secondary'}`} />
             ))}
           </div>
         </div>
