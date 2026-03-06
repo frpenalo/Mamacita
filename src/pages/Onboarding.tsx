@@ -27,6 +27,7 @@ const Onboarding = () => {
   const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [assignedPhone, setAssignedPhone] = useState<string | null>(null);
 
   const [name, setName] = useState('');
   const [shopName, setShopName] = useState('');
