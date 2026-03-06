@@ -305,6 +305,7 @@ Deno.serve(async (req) => {
 
     for (const d of daysToCheck) {
       const slots = getSlotsForDate(d.year, d.month, d.day, workStart, workEnd, appointments || [], blockedTimes || [], heldSlots || [], nowUTC, tz);
+      console.log(`[assistant-request] Day ${d.label} (${d.year}-${d.month}-${d.day}): ${slots.length} slots available`);
       if (slots.length > 0) {
         dayResults.push({ label: d.label, slots });
         totalSlots += slots.length;
