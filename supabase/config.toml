@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.send-whatsapp-confirmation]
 verify_jwt = false
+
+[functions.vapi-buy-number]
+verify_jwt = false
