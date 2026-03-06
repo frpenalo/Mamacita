@@ -193,6 +193,45 @@ const Onboarding = () => {
             </div>
           </div>
         )}
+
+        {step === 4 && (
+          <div className="space-y-6 text-center">
+            <div className="flex justify-center">
+              <div className="h-16 w-16 rounded-full gold-gradient flex items-center justify-center">
+                <Check className="h-8 w-8 text-primary-foreground" />
+              </div>
+            </div>
+            <h2 className="text-xl font-semibold">¡Todo listo!</h2>
+            {assignedPhone ? (
+              <div className="space-y-3">
+                <p className="text-muted-foreground text-sm">Tu número de MamaCita es:</p>
+                <div className="flex items-center justify-center gap-2 bg-secondary p-4 rounded-lg">
+                  <Phone className="h-5 w-5 text-primary" />
+                  <span className="text-lg font-bold gold-text">{assignedPhone}</span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(assignedPhone);
+                      toast.success('Número copiado');
+                    }}
+                    className="ml-1 p-1 rounded hover:bg-muted transition-colors"
+                  >
+                    <Copy className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </div>
+                <p className="text-muted-foreground text-sm">
+                  Compártelo con tus clientes para que puedan agendar citas automáticamente.
+                </p>
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                Tu cuenta ha sido creada exitosamente. El número de teléfono será asignado pronto.
+              </p>
+            )}
+            <Button onClick={() => navigate('/dashboard')} className="w-full gold-gradient text-primary-foreground font-semibold">
+              Ir al Dashboard <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
