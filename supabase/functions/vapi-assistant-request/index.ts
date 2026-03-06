@@ -257,7 +257,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const label = i === 0 ? "Hoy" : i === 1 ? "Mañana" : `${DAY_LABELS[dayKey] || dayKey} ${parts.day}`;
+      const label = i === 0 ? "Hoy" : i === 1 ? "Mañana" : `${DAY_LABELS[dayKey] || dayKey} ${parts.day} de ${MONTH_LABELS[parts.month]}`;
       daysToCheck.push({ year: parts.year, month: parts.month, day: parts.day, label });
     }
 
