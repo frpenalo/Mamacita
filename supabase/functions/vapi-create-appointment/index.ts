@@ -255,8 +255,9 @@ Deno.serve(async (req) => {
       .single();
 
     if (apptErr || !appointment) {
+      console.error("[create-appt] Appointment creation error:", apptErr);
       return new Response(
-        JSON.stringify({ error: "Failed to create appointment", detail: apptErr?.message }),
+        JSON.stringify({ error: "Failed to create appointment" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
