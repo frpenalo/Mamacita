@@ -28,6 +28,10 @@ const Register = () => {
     if (error) {
       toast.error(error.message);
     } else {
+      // Store referral code for use during onboarding
+      if (refCode) {
+        localStorage.setItem('mamacita_ref', refCode);
+      }
       toast.success('Cuenta creada. Revisa tu correo para confirmar.');
       navigate('/login');
     }
