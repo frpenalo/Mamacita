@@ -46,6 +46,22 @@ serve(async (req) => {
       });
     }
 
+    // Verify the barber_id belongs to the authenticated user
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const { data: barberCheck } = await supabaseAdmin
+      .from("barbers")
+      .select("id")
+      .eq("id", barber_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!barberCheck) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Call Vapi to buy a phone number
     console.log(`[vapi-buy-number] Purchasing number for barber ${barber_id}, shop: ${shop_name}`);
     const vapiRes = await fetch("https://api.vapi.ai/phone-number", {
