@@ -29,10 +29,14 @@ const Dashboard = () => {
   const { data: barber } = useBarber();
   const [showNewAppt, setShowNewAppt] = useState(false);
 
-  const todayStart = new Date();
+  // Get today's date boundaries in EST
+  const nowInEST = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const todayStart = new Date(nowInEST);
   todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date();
+  const todayEnd = new Date(nowInEST);
   todayEnd.setHours(23, 59, 59, 999);
+
+  const todayDateStr = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
 
   const { data: todayAppointments = [], refetch } = useQuery({
     queryKey: ['appointments-today', barber?.id],
