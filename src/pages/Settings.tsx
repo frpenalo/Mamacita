@@ -244,7 +244,7 @@ const Settings = () => {
 
           <Separator />
 
-          <Button variant="outline" onClick={signOut} className="w-full text-destructive border-destructive">
+          <Button variant="outline" onClick={signOut} className="w-full bg-transparent" style={{ borderColor: '#444444', color: '#888888' }}>
             <LogOut className="mr-2 h-4 w-4" /> Cerrar sesión
           </Button>
         </div>
