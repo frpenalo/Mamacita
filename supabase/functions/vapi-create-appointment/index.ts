@@ -7,6 +7,85 @@ const corsHeaders = {
 };
 
 const SLOT_DURATION = 45; // minutes
+
+function getDatePartsInTZ(date: Date, tz: string) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value || "0", 10);
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hours: get("hour") === 24 ? 0 : get("hour"),
+    minutes: get("minute"),
+  };
+}
+
+function wallClockToUTC(year: number, month: number, day: number, hours: number, minutes: number, tz: string): Date {
+  const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`;
+  const testDate = new Date(dateStr + "Z");
+  const inTZ = getDatePartsInTZ(testDate, tz);
+  const wantedMinutes = hours * 60 + minutes;
+  const gotMinutes = inTZ.hours * 60 + inTZ.minutes;
+  let offsetMinutes = gotMinutes - wantedMinutes;
+  if (offsetMinutes > 720) offsetMinutes -= 1440;
+  if (offsetMinutes < -720) offsetMinutes += 1440;
+  return new Date(testDate.getTime() - offsetMinutes * 60000);
+}
+
+/**
+ * Parse start_time from Vapi which can be:
+ * - ISO 8601: "2026-03-08T15:00:00Z"
+ * - Time only: "3:00 PM"
+ * - Relative: "today at 3:00 PM", "tomorrow at 3:00 PM", "mañana a las 3:00 PM"
+ */
+function parseStartTime(raw: string, tz: string): Date | null {
+  // 1. Try ISO 8601 directly
+  const isoDate = new Date(raw);
+  if (!isNaN(isoDate.getTime()) && (raw.includes("T") || raw.includes("Z") || /^\d{4}-\d{2}-\d{2}/.test(raw))) {
+    return isoDate;
+  }
+
+  // 2. Extract time portion (e.g. "3:00 PM" from various formats)
+  const timeMatch = raw.match(/(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)/i);
+  if (!timeMatch) return null;
+
+  let hours = parseInt(timeMatch[1], 10);
+  const minutes = parseInt(timeMatch[2], 10);
+  const ampm = timeMatch[3].toUpperCase();
+
+  if (ampm === "PM" && hours !== 12) hours += 12;
+  if (ampm === "AM" && hours === 12) hours = 0;
+
+  // 3. Determine date offset (today vs tomorrow)
+  const nowUTC = new Date();
+  const nowParts = getDatePartsInTZ(nowUTC, tz);
+  let targetYear = nowParts.year;
+  let targetMonth = nowParts.month;
+  let targetDay = nowParts.day;
+
+  const lower = raw.toLowerCase();
+  if (lower.includes("tomorrow") || lower.includes("mañana")) {
+    // Add one day
+    const todayNoon = wallClockToUTC(targetYear, targetMonth, targetDay, 12, 0, tz);
+    const tomorrowNoon = new Date(todayNoon.getTime() + 24 * 60 * 60 * 1000);
+    const tmParts = getDatePartsInTZ(tomorrowNoon, tz);
+    targetYear = tmParts.year;
+    targetMonth = tmParts.month;
+    targetDay = tmParts.day;
+  }
+
+  return wallClockToUTC(targetYear, targetMonth, targetDay, hours, minutes, tz);
+}
 const HOLD_EXPIRATION_MINUTES = 10;
 
 function generateCode(): string {
@@ -84,7 +163,21 @@ Deno.serve(async (req) => {
 
     const tz = barber?.timezone || "America/New_York";
 
-    const startDate = new Date(start_time);
+    console.log(`[create-appointment] Raw start_time received: "${start_time}"`);
+
+    const startDate = parseStartTime(start_time, tz);
+    if (!startDate) {
+      console.error(`[create-appointment] Could not parse start_time: "${start_time}"`);
+      const msg = lang === "es"
+        ? "No pude entender la hora solicitada. ¿Puedes repetirla?"
+        : "I couldn't understand the requested time. Can you repeat it?";
+      return new Response(
+        JSON.stringify({ results: [{ toolCallId, result: msg }] }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`[create-appointment] Parsed startDate: ${startDate.toISOString()}`);
     const endDate = new Date(startDate.getTime() + SLOT_DURATION * 60000);
 
     // ✅ 1️⃣ RELEASE EXPIRED HELD SLOTS
