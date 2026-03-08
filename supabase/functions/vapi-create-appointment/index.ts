@@ -84,16 +84,12 @@ Deno.serve(async (req) => {
     const endDate = new Date(startDate.getTime() + SLOT_DURATION * 60000);
 
     // ✅ 1️⃣ RELEASE EXPIRED HELD SLOTS
-    const expirationTime = new Date(
-      Date.now() - HOLD_EXPIRATION_MINUTES * 60 * 1000
-    ).toISOString();
-
     await supabase
       .from("availability_slots")
       .update({ status: "available" })
       .eq("barber_id", barber_id)
       .eq("status", "held")
-      .lt("updated_at", expirationTime);
+      .lt("hold_expires_at", new Date().toISOString());
 
     // ✅ 2️⃣ PREVENT OVERLAPPING BOOKINGS
     const { data: overlapping } = await supabase
@@ -149,14 +145,48 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ✅ 4️⃣ CREATE APPOINTMENT
+    // ✅ 4️⃣ FIND OR CREATE CUSTOMER
+    const { data: existingCustomer } = await supabase
+      .from("customers")
+      .select("id, total_visits")
+      .eq("barber_id", barber_id)
+      .eq("phone_number", customer_phone)
+      .maybeSingle();
+
+    let customerId: string;
+
+    if (existingCustomer) {
+      customerId = existingCustomer.id;
+      await supabase
+        .from("customers")
+        .update({ total_visits: (existingCustomer.total_visits || 0) + 1 })
+        .eq("id", customerId);
+    } else {
+      const { data: newCustomer, error: custErr } = await supabase
+        .from("customers")
+        .insert({
+          barber_id,
+          name: customer_name,
+          phone_number: customer_phone,
+          total_visits: 1,
+        })
+        .select()
+        .single();
+
+      if (custErr || !newCustomer) {
+        throw new Error("Customer creation failed");
+      }
+      customerId = newCustomer.id;
+    }
+
+    // ✅ 5️⃣ CREATE APPOINTMENT
     const appointmentCode = generateCode();
 
     const { data: appointment, error } = await supabase
       .from("appointments")
       .insert({
         barber_id,
-        customer_id: customer_phone,
+        customer_id: customerId,
         start_time: startDate.toISOString(),
         end_time: endDate.toISOString(),
         status: "confirmed",
