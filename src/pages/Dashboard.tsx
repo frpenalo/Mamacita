@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBarber } from '@/hooks/useBarber';
 import BottomNav from '@/components/BottomNav';
-import { Plus, Clock, User } from 'lucide-react';
+import { Plus, Clock, User, Phone, Copy } from 'lucide-react';
+import { toast } from 'sonner';
 import logoIcon from '@/assets/logo.ico';
 import NewAppointmentDialog from '@/components/NewAppointmentDialog';
 import AppointmentActions from '@/components/AppointmentActions';
@@ -91,6 +92,24 @@ const Dashboard = () => {
       </div>
 
       <div className="px-4 space-y-6">
+        {/* MamaCita Phone Number */}
+        {barber?.phone_number && (barber as any).vapi_phone_number_id && (
+          <div className="bg-card rounded-lg p-3 border border-border flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Phone className="h-4 w-4 text-primary" />
+              <span className="text-sm">📞 Tu número MamaCita: <span className="font-bold gold-text">{barber.phone_number}</span></span>
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(barber.phone_number!);
+                toast.success('Número copiado');
+              }}
+              className="p-1.5 rounded-md hover:bg-secondary transition-colors"
+            >
+              <Copy className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+        )}
         {/* Hoy */}
         <section>
           <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">

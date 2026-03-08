@@ -11,7 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { LogOut, Phone, MessageSquare, CalendarIcon, Ban, Trash2 } from 'lucide-react';
+import { LogOut, CalendarIcon, Ban, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -49,10 +49,6 @@ const Settings = () => {
   const [blockReason, setBlockReason] = useState('');
   const [blockingSaving, setBlockingSaving] = useState(false);
 
-  // Vapi
-  const [vapiAssistantId, setVapiAssistantId] = useState('');
-  const [vapiPhoneNumberId, setVapiPhoneNumberId] = useState('');
-  const [vapiSaving, setVapiSaving] = useState(false);
 
   const { data: blockedTimes = [], refetch: refetchBlocked } = useQuery({
     queryKey: ['blocked-times', barber?.id],
@@ -79,8 +75,6 @@ const Settings = () => {
       setWorkingDays(barber.working_days || []);
       setStartTime(barber.working_hours_start || '09:00');
       setEndTime(barber.working_hours_end || '18:00');
-      setVapiAssistantId((barber as any).vapi_assistant_id || '');
-      setVapiPhoneNumberId((barber as any).vapi_phone_number_id || '');
     }
   }, [barber]);
 
@@ -247,87 +241,6 @@ const Settings = () => {
 
           <Separator />
 
-          {/* Vapi Section */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Phone className="h-5 w-5 text-primary" /> Teléfono MamaCita
-            </h2>
-            {barber?.phone_number && (barber as any).vapi_phone_number_id ? (
-              <div className="bg-secondary p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground">Tu número asignado:</p>
-                <p className="text-lg font-bold gold-text">{barber.phone_number}</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">No tienes un número de MamaCita asignado aún.</p>
-                <Button
-                  onClick={async () => {
-                    if (!barber) return;
-                    setVapiSaving(true);
-                    try {
-                      const res = await supabase.functions.invoke('vapi-buy-number', {
-                        body: { barber_id: barber.id, shop_name: barber.shop_name },
-                      });
-                      if (res.error) {
-                        toast.error('Error al comprar número: ' + (res.error.message || 'Error desconocido'));
-                      } else if (res.data?.phone_number) {
-                        toast.success(`¡Número asignado: ${res.data.phone_number}!`);
-                        queryClient.invalidateQueries({ queryKey: ['barber'] });
-                      } else {
-                        toast.success('Número comprado. Se asignará en breve.');
-                        queryClient.invalidateQueries({ queryKey: ['barber'] });
-                      }
-                    } catch (e: any) {
-                      toast.error('Error: ' + e.message);
-                    }
-                    setVapiSaving(false);
-                  }}
-                  className="w-full gold-gradient text-primary-foreground font-semibold"
-                  disabled={vapiSaving}
-                >
-                  {vapiSaving ? 'Comprando número...' : 'Comprar número de teléfono'}
-                </Button>
-              </div>
-            )}
-            
-            <Separator className="my-2" />
-            
-            <div className="space-y-2">
-              <Label>Vapi Assistant ID</Label>
-              <Input value={vapiAssistantId} onChange={(e) => setVapiAssistantId(e.target.value)} placeholder="asst_xxxxxxxxxxxx" />
-            </div>
-            <div className="space-y-2">
-              <Label>Vapi Phone Number ID</Label>
-              <Input value={vapiPhoneNumberId} onChange={(e) => setVapiPhoneNumberId(e.target.value)} placeholder="phn_xxxxxxxxxxxx" />
-            </div>
-            <Button
-              onClick={async () => {
-                if (!barber) return;
-                setVapiSaving(true);
-                const { error } = await supabase.from('barbers').update({
-                  vapi_assistant_id: vapiAssistantId || null,
-                  vapi_phone_number_id: vapiPhoneNumberId || null,
-                } as any).eq('id', barber.id);
-                setVapiSaving(false);
-                if (error) toast.error('Error al guardar Vapi');
-                else { toast.success('Configuración Vapi guardada'); queryClient.invalidateQueries({ queryKey: ['barber'] }); }
-              }}
-              variant="outline"
-              className="w-full border-primary text-primary"
-              disabled={vapiSaving}
-            >
-              {vapiSaving ? 'Guardando...' : 'Guardar configuración Vapi'}
-            </Button>
-          </div>
-          <div className="bg-card rounded-lg p-4 border border-border">
-            <div className="flex items-center gap-3">
-              <MessageSquare className="h-5 w-5 text-primary" />
-              <div>
-                <p className="font-medium text-sm">Conectar WhatsApp Business</p>
-                <p className="text-xs text-muted-foreground">Próximamente</p>
-              </div>
-            </div>
-          </div>
 
           <Separator />
 
