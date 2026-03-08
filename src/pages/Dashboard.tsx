@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBarber } from '@/hooks/useBarber';
 import BottomNav from '@/components/BottomNav';
-import { Plus, Clock, User, Phone, Copy } from 'lucide-react';
+import { Plus, Clock, User, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import logoIcon from '@/assets/logo.ico';
 import NewAppointmentDialog from '@/components/NewAppointmentDialog';
