@@ -28,6 +28,7 @@ const statusLabels: Record<string, string> = {
 
 const Dashboard = () => {
   const { data: barber } = useBarber();
+  const { user } = useAuth();
   const [showNewAppt, setShowNewAppt] = useState(false);
 
   const todayStart = new Date();
