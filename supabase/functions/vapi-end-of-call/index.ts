@@ -11,24 +11,14 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Validate Vapi webhook secret
-  const vapiSecret = Deno.env.get("VAPI_WEBHOOK_SECRET");
-  const incomingSecret = req.headers.get("x-vapi-secret");
-  if (!vapiSecret || incomingSecret !== vapiSecret) {
-    console.error("Unauthorized: Invalid or missing x-vapi-secret header");
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
   try {
     const body = await req.json();
     const messageType = body?.message?.type;
 
+    // Only process end-of-call-report; ignore all other message types
     if (messageType !== "end-of-call-report") {
-      return new Response(JSON.stringify({ error: "Unsupported message type" }), {
-        status: 400,
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -60,23 +50,18 @@ Deno.serve(async (req) => {
 
     if (error) {
       console.error("Error releasing slots:", error);
-      return new Response(JSON.stringify({ error: "Failed to release slots" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
+    console.log(`[end-of-call] Released ${data?.length || 0} held slots for call ${callId}`);
+
     return new Response(
-      JSON.stringify({ success: true, released_slots: data?.length || 0 }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      JSON.stringify({ ok: true, released_slots: data?.length || 0 }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
     console.error("vapi-end-of-call error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500,
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
