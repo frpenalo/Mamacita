@@ -35,6 +35,7 @@ const NewAppointmentDialog = ({ open, onOpenChange, barberId, barberStart = '09:
 
   // Date & time
   const [date, setDate] = useState<Date | undefined>();
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
