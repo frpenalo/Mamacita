@@ -48,20 +48,24 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const message = body?.message;
 
-    const toolCall =
-      message?.type === "tool-calls"
-        ? message.toolCallList?.[0]
-        : null;
+    // Only process tool-calls; ignore all other message types
+    if (message?.type !== "tool-calls") {
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
+    const toolCall = message.toolCallList?.[0];
     const toolCallId = toolCall?.id ?? null;
-    const args = toolCall?.function?.arguments ?? body;
+    const args = toolCall?.function?.arguments ?? {};
 
     const { barber_id, customer_name, customer_phone, start_time } = args;
 
     if (!barber_id || !customer_name || !customer_phone || !start_time) {
       return new Response(JSON.stringify({ ok: true }), {
         status: 200,
-        headers: corsHeaders,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -102,18 +106,13 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (overlapping) {
-      const overlapPayload = {
-        status: "duplicate",
-        spoken_confirmation:
-          lang === "es"
-            ? "Ese horario se superpone con otra cita existente. Permíteme buscar otra opción."
-            : "That time overlaps with another existing appointment. Let me check another available time.",
-      };
+      const msg =
+        lang === "es"
+          ? "Ese horario se superpone con otra cita existente. Permíteme buscar otra opción."
+          : "That time overlaps with another existing appointment. Let me check another available time.";
 
       return new Response(
-        JSON.stringify({
-          results: [{ toolCallId, result: overlapPayload }],
-        }),
+        JSON.stringify({ results: [{ toolCallId, result: msg }] }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -129,18 +128,13 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (!lockedSlot) {
-      const duplicatePayload = {
-        status: "duplicate",
-        spoken_confirmation:
-          lang === "es"
-            ? "Ese horario acaba de ser reservado por otra persona. Permíteme buscar otra opción."
-            : "That time was just booked by someone else. Let me check another available time.",
-      };
+      const msg =
+        lang === "es"
+          ? "Ese horario acaba de ser reservado por otra persona. Permíteme buscar otra opción."
+          : "That time was just booked by someone else. Let me check another available time.";
 
       return new Response(
-        JSON.stringify({
-          results: [{ toolCallId, result: duplicatePayload }],
-        }),
+        JSON.stringify({ results: [{ toolCallId, result: msg }] }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -199,7 +193,7 @@ Deno.serve(async (req) => {
       throw new Error("Appointment creation failed");
     }
 
-    // ✅ 5️⃣ CONFIRM SLOT
+    // ✅ 6️⃣ CONFIRM SLOT
     await supabase
       .from("availability_slots")
       .update({ status: "confirmed" })
@@ -228,7 +222,7 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
-      headers: corsHeaders,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
