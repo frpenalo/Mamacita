@@ -190,13 +190,10 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const vapiSecret = req.headers.get('x-vapi-secret');
-  const expectedSecret = Deno.env.get('VAPI_SECRET');
-  if (expectedSecret && vapiSecret !== expectedSecret) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+  const secret = req.headers.get("x-vapi-secret");
+  const expected = Deno.env.get("VAPI_SECRET");
+  if (expected && (!secret || secret !== expected)) {
+    return new Response("Unauthorized", { status: 401 });
   }
 
   try {
