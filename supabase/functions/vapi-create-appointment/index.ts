@@ -273,14 +273,14 @@ Deno.serve(async (req) => {
 
     console.log("[create-appt] Appointment confirmed:", appointmentCode);
 
+    const toolCallId = body?.message?.toolCallList?.[0]?.id;
+
     return new Response(
       JSON.stringify({
-        success: true,
-        appointment_code: appointmentCode,
-        appointment_id: appointment.id,
-        customer_id: customerId,
-        start_time: startIso,
-        end_time: endIso,
+        results: [{
+          toolCallId: toolCallId,
+          result: `Appointment confirmed. Code: ${appointmentCode}`
+        }]
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
