@@ -213,18 +213,12 @@ Deno.serve(async (req) => {
         ? `Perfecto ${customer_name}. Tu cita está confirmada para las ${spokenTime}. Tu código de confirmación es ${appointmentCode}.`
         : `Perfect ${customer_name}. Your appointment is confirmed for ${spokenTime}. Your confirmation code is ${appointmentCode}.`;
 
-    const resultPayload = {
-      status: "confirmed",
-      appointment_code: appointmentCode,
-      appointment_id: appointment.id,
-      spoken_confirmation: confirmation,
-      start_time: startDate.toISOString(),
-      end_time: endDate.toISOString(),
-    };
-
     return new Response(
       JSON.stringify({
-        results: [{ toolCallId, result: resultPayload }],
+        results: [{
+          toolCallId: toolCallId,
+          result: confirmation,
+        }],
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
