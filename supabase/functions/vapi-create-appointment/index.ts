@@ -145,14 +145,48 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ✅ 4️⃣ CREATE APPOINTMENT
+    // ✅ 4️⃣ FIND OR CREATE CUSTOMER
+    const { data: existingCustomer } = await supabase
+      .from("customers")
+      .select("id, total_visits")
+      .eq("barber_id", barber_id)
+      .eq("phone_number", customer_phone)
+      .maybeSingle();
+
+    let customerId: string;
+
+    if (existingCustomer) {
+      customerId = existingCustomer.id;
+      await supabase
+        .from("customers")
+        .update({ total_visits: (existingCustomer.total_visits || 0) + 1 })
+        .eq("id", customerId);
+    } else {
+      const { data: newCustomer, error: custErr } = await supabase
+        .from("customers")
+        .insert({
+          barber_id,
+          name: customer_name,
+          phone_number: customer_phone,
+          total_visits: 1,
+        })
+        .select()
+        .single();
+
+      if (custErr || !newCustomer) {
+        throw new Error("Customer creation failed");
+      }
+      customerId = newCustomer.id;
+    }
+
+    // ✅ 5️⃣ CREATE APPOINTMENT
     const appointmentCode = generateCode();
 
     const { data: appointment, error } = await supabase
       .from("appointments")
       .insert({
         barber_id,
-        customer_id: customer_phone,
+        customer_id: customerId,
         start_time: startDate.toISOString(),
         end_time: endDate.toISOString(),
         status: "confirmed",
