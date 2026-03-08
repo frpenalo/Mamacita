@@ -80,10 +80,24 @@ const Onboarding = () => {
       return;
     }
 
+    // 2. Handle referral if ref code exists
+    const refCode = localStorage.getItem('mamacita_ref');
+    if (refCode && barberData?.id) {
+      const { data: referrerId } = await supabase.rpc('get_barber_id_by_referral_code', { code: refCode });
+      if (referrerId) {
+        await supabase.from('referrals').insert({
+          referrer_barber_id: referrerId,
+          referred_barber_id: barberData.id,
+          status: 'pending',
+          monthly_reward: 5.00,
+        });
+      }
+      localStorage.removeItem('mamacita_ref');
+    }
+
     setLoading(false);
     setStep(4);
     toast.success('¡Bienvenido a MamaCita!');
-    // Pre-populate the cache so OnboardingGuard doesn't redirect back
     await queryClient.refetchQueries({ queryKey: ['barber'] });
   };
 
