@@ -147,15 +147,18 @@ Deno.serve(async (req) => {
     let args =
       body?.message?.toolCallList?.[0]?.function?.arguments ||
       body;
-    console.log("ARGS BEFORE PARSE:", args);
-    console.log("ARGS TYPE:", typeof args);
 
     if (typeof args === "string") {
-      console.log("Parsing string arguments...");
-      args = JSON.parse(args);
+      try {
+        console.log("[create-appt] Parsing string arguments...");
+        args = JSON.parse(args);
+      } catch (e) {
+        console.error("[create-appt] Failed to parse arguments:", args);
+        throw new Error("Invalid tool arguments format");
+      }
     }
 
-    console.log("ARGS AFTER PARSE:", JSON.stringify(args));
+    console.log("[create-appt] Extracted args:", JSON.stringify(args));
 
     const { barber_id, customer_name, customer_phone, start_time } = args;
 
