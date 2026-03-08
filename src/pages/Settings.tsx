@@ -75,8 +75,6 @@ const Settings = () => {
       setWorkingDays(barber.working_days || []);
       setStartTime(barber.working_hours_start || '09:00');
       setEndTime(barber.working_hours_end || '18:00');
-      setVapiAssistantId((barber as any).vapi_assistant_id || '');
-      setVapiPhoneNumberId((barber as any).vapi_phone_number_id || '');
     }
   }, [barber]);
 
