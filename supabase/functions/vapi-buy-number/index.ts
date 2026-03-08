@@ -84,7 +84,8 @@ serve(async (req) => {
     console.log(`[vapi-buy-number] Vapi response status: ${vapiRes.status}`, JSON.stringify(vapiData));
 
     if (!vapiRes.ok) {
-      return new Response(JSON.stringify({ error: "Vapi API error", details: vapiData }), {
+      console.error("[vapi-buy-number] Vapi API error:", JSON.stringify(vapiData));
+      return new Response(JSON.stringify({ error: "Phone number purchase failed" }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
