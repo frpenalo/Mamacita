@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBarber } from '@/hooks/useBarber';
@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 import logoIcon from '@/assets/logo.ico';
 import NewAppointmentDialog from '@/components/NewAppointmentDialog';
 import AppointmentActions from '@/components/AppointmentActions';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 
 const statusColors: Record<string, string> = {
   confirmed: 'bg-primary/20 text-primary',
@@ -25,21 +27,40 @@ const statusLabels: Record<string, string> = {
   rescheduled: 'Reagendada',
 };
 
+const getNext7Days = () => {
+  const days: { date: Date; dateStr: string; label: string }[] = [];
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + i);
+    d.setHours(0, 0, 0, 0);
+
+    const dateStr = d.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+
+    let label: string;
+    if (i === 0) {
+      label = 'Hoy';
+    } else {
+      const weekday = d.toLocaleDateString('es-US', { weekday: 'short', timeZone: 'America/New_York' });
+      const day = d.getDate();
+      label = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${day}`;
+    }
+
+    days.push({ date: d, dateStr, label });
+  }
+  return days;
+};
+
 const Dashboard = () => {
   const { data: barber } = useBarber();
   const [showNewAppt, setShowNewAppt] = useState(false);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
 
-  // Get today's date boundaries in EST
-  const nowInEST = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const todayStart = new Date(nowInEST);
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date(nowInEST);
-  todayEnd.setHours(23, 59, 59, 999);
+  const days = useMemo(() => getNext7Days(), []);
 
-  const todayDateStr = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
-
-  const { data: todayAppointments = [], refetch } = useQuery({
-    queryKey: ['appointments-today', barber?.id, todayDateStr],
+  const { data: weekAppointments = [], refetch } = useQuery({
+    queryKey: ['appointments-week', barber?.id, days[0]?.dateStr],
     queryFn: async () => {
       if (!barber) return [];
       const { data, error } = await supabase
@@ -48,42 +69,39 @@ const Dashboard = () => {
         .eq('barber_id', barber.id)
         .order('start_time', { ascending: true });
       if (error) throw error;
-      // Filter by EST date locally
+
+      // Filter to only the 7-day window
+      const dayStrs = new Set(days.map(d => d.dateStr));
       return (data || []).filter((appt: any) => {
         const apptDate = new Date(appt.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
-        return apptDate === todayDateStr;
+        return dayStrs.has(apptDate);
       });
     },
     enabled: !!barber,
   });
 
-  const { data: upcomingAppointments = [], refetch: refetchUpcoming } = useQuery({
-    queryKey: ['appointments-upcoming', barber?.id, todayDateStr],
-    queryFn: async () => {
-      if (!barber) return [];
-      const { data, error } = await supabase
-        .from('appointments')
-        .select('*, customers(name, phone_number)')
-        .eq('barber_id', barber.id)
-        .in('status', ['confirmed', 'rescheduled'])
-        .order('start_time', { ascending: true });
-      if (error) throw error;
-      // Filter to future dates in EST
-      return (data || []).filter((appt: any) => {
-        const apptDate = new Date(appt.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
-        return apptDate > todayDateStr;
-      }).slice(0, 5);
-    },
-    enabled: !!barber,
-  });
+  // Group appointments by date string
+  const appointmentsByDay = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    for (const day of days) {
+      map[day.dateStr] = [];
+    }
+    for (const appt of weekAppointments) {
+      const apptDate = new Date(appt.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+      if (map[apptDate]) {
+        map[apptDate].push(appt);
+      }
+    }
+    return map;
+  }, [weekAppointments, days]);
 
-  const handleRefresh = () => { refetch(); refetchUpcoming(); };
+  const handleRefresh = () => { refetch(); };
 
   const formatTime = (dateStr: string) =>
     new Date(dateStr).toLocaleTimeString('es-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York' });
 
-  const formatDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString('es-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/New_York' });
+  const selectedDay = days[selectedDayIndex];
+  const selectedAppointments = selectedDay ? (appointmentsByDay[selectedDay.dateStr] || []) : [];
 
   return (
     <div className="min-h-screen pb-20">
@@ -118,77 +136,80 @@ const Dashboard = () => {
             </button>
           </div>
         )}
-        {/* Hoy */}
+
+        {/* 7-Day Tabs */}
         <section>
           <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary" /> Hoy
+            <Clock className="h-5 w-5 text-primary" /> Citas
           </h2>
-          {todayAppointments.length === 0 ? (
-            <div className="bg-card rounded-lg p-6 text-center">
-              <p className="text-muted-foreground">No hay citas para hoy</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {todayAppointments.map((appt: any) => (
-                <div key={appt.id} className="bg-card rounded-lg p-4 flex items-center justify-between border border-border">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center">
-                      <User className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">{appt.customers?.name}</p>
-                      <p className="text-xs text-muted-foreground">{formatTime(appt.start_time)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-1 rounded-full ${statusColors[appt.status] || 'bg-secondary text-muted-foreground'}`}>
-                      {statusLabels[appt.status] || appt.status}
-                    </span>
-                    <AppointmentActions
-                      appointment={appt}
-                      barberId={barber!.id}
-                      barberStart={barber?.working_hours_start || '09:00'}
-                      barberEnd={barber?.working_hours_end || '18:00'}
-                      onUpdated={handleRefresh}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
 
-        {/* Próximas */}
-        <section>
-          <h2 className="text-lg font-semibold mb-3">Próximas citas</h2>
-          {upcomingAppointments.length === 0 ? (
-            <div className="bg-card rounded-lg p-6 text-center">
-              <p className="text-muted-foreground">No hay citas próximas</p>
+          <ScrollArea className="w-full">
+            <div className="flex gap-2 pb-2">
+              {days.map((day, i) => {
+                const count = (appointmentsByDay[day.dateStr] || []).length;
+                const isActive = i === selectedDayIndex;
+                return (
+                  <button
+                    key={day.dateStr}
+                    onClick={() => setSelectedDayIndex(i)}
+                    className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${
+                      isActive
+                        ? 'text-primary-foreground shadow-md'
+                        : 'bg-secondary text-muted-foreground hover:text-foreground'
+                    }`}
+                    style={isActive ? { backgroundColor: '#C9A96E' } : undefined}
+                  >
+                    {day.label}
+                    {count > 0 && (
+                      <Badge
+                        variant={isActive ? 'secondary' : 'default'}
+                        className="h-5 min-w-5 flex items-center justify-center px-1.5 text-[10px]"
+                      >
+                        {count}
+                      </Badge>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-          ) : (
-            <div className="space-y-2">
-              {upcomingAppointments.map((appt: any) => (
-                <div key={appt.id} className="bg-card rounded-lg p-4 flex items-center justify-between border border-border">
-                  <div>
-                    <p className="font-medium text-sm">{appt.customers?.name}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(appt.start_time)} · {formatTime(appt.start_time)}</p>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
+
+          <div className="mt-3">
+            {selectedAppointments.length === 0 ? (
+              <div className="bg-card rounded-lg p-6 text-center">
+                <p className="text-muted-foreground">No hay citas para este día</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {selectedAppointments.map((appt: any) => (
+                  <div key={appt.id} className="bg-card rounded-lg p-4 flex items-center justify-between border border-border">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center">
+                        <User className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{appt.customers?.name}</p>
+                        <p className="text-xs text-muted-foreground">{formatTime(appt.start_time)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs px-2 py-1 rounded-full ${statusColors[appt.status] || 'bg-secondary text-muted-foreground'}`}>
+                        {statusLabels[appt.status] || appt.status}
+                      </span>
+                      <AppointmentActions
+                        appointment={appt}
+                        barberId={barber!.id}
+                        barberStart={barber?.working_hours_start || '09:00'}
+                        barberEnd={barber?.working_hours_end || '18:00'}
+                        onUpdated={handleRefresh}
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-1 rounded-full ${statusColors[appt.status] || 'bg-secondary text-muted-foreground'}`}>
-                      {statusLabels[appt.status] || appt.status}
-                    </span>
-                    <AppointmentActions
-                      appointment={appt}
-                      barberId={barber!.id}
-                      barberStart={barber?.working_hours_start || '09:00'}
-                      barberEnd={barber?.working_hours_end || '18:00'}
-                      onUpdated={handleRefresh}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </section>
       </div>
 
