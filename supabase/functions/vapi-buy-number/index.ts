@@ -108,7 +108,7 @@ serve(async (req) => {
 
     if (updateError) {
       console.error(`[vapi-buy-number] DB update error:`, updateError);
-      return new Response(JSON.stringify({ error: "Failed to update barber", details: updateError.message }), {
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
