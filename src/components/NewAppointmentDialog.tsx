@@ -35,6 +35,7 @@ const NewAppointmentDialog = ({ open, onOpenChange, barberId, barberStart = '09:
 
   // Date & time
   const [date, setDate] = useState<Date | undefined>();
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -246,7 +247,7 @@ const NewAppointmentDialog = ({ open, onOpenChange, barberId, barberStart = '09:
           {hasClient && (
             <div className="space-y-3">
               <Label className="text-muted-foreground text-xs uppercase tracking-wider">Fecha</Label>
-              <Popover>
+              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !date && "text-muted-foreground")}>
                     <CalendarIcon className="mr-2 h-4 w-4" />
@@ -257,7 +258,7 @@ const NewAppointmentDialog = ({ open, onOpenChange, barberId, barberStart = '09:
                   <Calendar
                     mode="single"
                     selected={date}
-                    onSelect={setDate}
+                    onSelect={(d) => { setDate(d); setCalendarOpen(false); }}
                     disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
                     initialFocus
                     className="p-3 pointer-events-auto"
