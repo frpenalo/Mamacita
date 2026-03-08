@@ -42,21 +42,8 @@ function wallClockToUTC(year: number, month: number, day: number, hours: number,
   return new Date(testDate.getTime() - offsetMinutes * 60000);
 }
 
-/**
- * Parse start_time from Vapi which can be:
- * - ISO 8601: "2026-03-08T15:00:00Z"
- * - Time only: "3:00 PM"
- * - Relative: "today at 3:00 PM", "tomorrow at 3:00 PM", "mañana a las 3:00 PM"
- */
-function parseStartTime(raw: string, tz: string): Date | null {
-  // 1. Try ISO 8601 directly
-  const isoDate = new Date(raw);
-  if (!isNaN(isoDate.getTime()) && (raw.includes("T") || raw.includes("Z") || /^\d{4}-\d{2}-\d{2}/.test(raw))) {
-    return isoDate;
-  }
-
-  // 2. Extract time portion (e.g. "3:00 PM" from various formats)
-  const timeMatch = raw.match(/(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)/i);
+function parseTimeString(input: string): { hours: number; minutes: number } | null {
+  const timeMatch = input.match(/(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)/i);
   if (!timeMatch) return null;
 
   let hours = parseInt(timeMatch[1], 10);
@@ -66,25 +53,48 @@ function parseStartTime(raw: string, tz: string): Date | null {
   if (ampm === "PM" && hours !== 12) hours += 12;
   if (ampm === "AM" && hours === 12) hours = 0;
 
-  // 3. Determine date offset (today vs tomorrow)
-  const nowUTC = new Date();
-  const nowParts = getDatePartsInTZ(nowUTC, tz);
-  let targetYear = nowParts.year;
-  let targetMonth = nowParts.month;
-  let targetDay = nowParts.day;
+  return { hours, minutes };
+}
 
-  const lower = raw.toLowerCase();
-  if (lower.includes("tomorrow") || lower.includes("mañana")) {
-    // Add one day
-    const todayNoon = wallClockToUTC(targetYear, targetMonth, targetDay, 12, 0, tz);
-    const tomorrowNoon = new Date(todayNoon.getTime() + 24 * 60 * 60 * 1000);
-    const tmParts = getDatePartsInTZ(tomorrowNoon, tz);
-    targetYear = tmParts.year;
-    targetMonth = tmParts.month;
-    targetDay = tmParts.day;
+function parseStartTime(startTimeInput: string, tz: string): Date {
+  if (!startTimeInput) {
+    throw new Error("startTimeInput is null or empty");
   }
 
-  return wallClockToUTC(targetYear, targetMonth, targetDay, hours, minutes, tz);
+  const cleanedInput = String(startTimeInput).trim();
+  console.log("[create-appt] Parsing start_time cleaned:", cleanedInput);
+
+  // ✅ Try strict ISO first
+  const isoDate = new Date(cleanedInput);
+  if (!isNaN(isoDate.getTime())) {
+    console.log("[create-appt] Parsed as ISO:", isoDate.toISOString());
+    return isoDate;
+  }
+
+  // ✅ Try time-only formats
+  const timeParsed = parseTimeString(cleanedInput);
+  if (!timeParsed) {
+    throw new Error(`Cannot parse start_time format: ${cleanedInput}`);
+  }
+
+  const now = new Date();
+  const nowParts = getDatePartsInTZ(now, tz);
+
+  const result = wallClockToUTC(
+    nowParts.year,
+    nowParts.month,
+    nowParts.day,
+    timeParsed.hours,
+    timeParsed.minutes,
+    tz
+  );
+
+  if (!result || isNaN(result.getTime())) {
+    throw new Error(`Wall-clock conversion failed for: ${cleanedInput}`);
+  }
+
+  console.log("[create-appt] Parsed wall-clock → UTC:", result.toISOString());
+  return result;
 }
 const HOLD_EXPIRATION_MINUTES = 10;
 
