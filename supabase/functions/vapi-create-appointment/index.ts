@@ -134,9 +134,6 @@ Deno.serve(async (req) => {
   }
 
   let supabase: any = null;
-  let barberIdForRollback: string | null = null;
-  let startIsoForRollback: string | null = null;
-  let slotHeld = false;
 
   try {
     const body = await req.json();
