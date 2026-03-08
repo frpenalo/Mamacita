@@ -96,7 +96,7 @@ function parseStartTime(startTimeInput: string, tz: string): Date {
   console.log("[create-appt] Parsed wall-clock → UTC:", result.toISOString());
   return result;
 }
-const HOLD_EXPIRATION_MINUTES = 10;
+
 
 function generateCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
