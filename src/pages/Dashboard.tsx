@@ -39,18 +39,20 @@ const Dashboard = () => {
   const todayDateStr = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
 
   const { data: todayAppointments = [], refetch } = useQuery({
-    queryKey: ['appointments-today', barber?.id],
+    queryKey: ['appointments-today', barber?.id, todayDateStr],
     queryFn: async () => {
       if (!barber) return [];
       const { data, error } = await supabase
         .from('appointments')
         .select('*, customers(name, phone_number)')
         .eq('barber_id', barber.id)
-        .gte('start_time', todayStart.toISOString())
-        .lte('start_time', todayEnd.toISOString())
         .order('start_time', { ascending: true });
       if (error) throw error;
-      return data;
+      // Filter by EST date locally
+      return (data || []).filter((appt: any) => {
+        const apptDate = new Date(appt.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+        return apptDate === todayDateStr;
+      });
     },
     enabled: !!barber,
   });
