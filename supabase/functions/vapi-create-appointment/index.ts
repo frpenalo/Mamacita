@@ -163,7 +163,21 @@ Deno.serve(async (req) => {
 
     const tz = barber?.timezone || "America/New_York";
 
-    const startDate = new Date(start_time);
+    console.log(`[create-appointment] Raw start_time received: "${start_time}"`);
+
+    const startDate = parseStartTime(start_time, tz);
+    if (!startDate) {
+      console.error(`[create-appointment] Could not parse start_time: "${start_time}"`);
+      const msg = lang === "es"
+        ? "No pude entender la hora solicitada. ¿Puedes repetirla?"
+        : "I couldn't understand the requested time. Can you repeat it?";
+      return new Response(
+        JSON.stringify({ results: [{ toolCallId, result: msg }] }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`[create-appointment] Parsed startDate: ${startDate.toISOString()}`);
     const endDate = new Date(startDate.getTime() + SLOT_DURATION * 60000);
 
     // ✅ 1️⃣ RELEASE EXPIRED HELD SLOTS
