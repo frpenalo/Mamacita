@@ -155,16 +155,37 @@ Deno.serve(async (req) => {
 
     const tz = barber?.timezone || "America/New_York";
 
-    const startDate = parseStartTime(String(start_time), tz);
+    // ✅ LOG ULTRA DETALLADO
+    console.log("[create-appt] start_time raw value:", start_time);
+    console.log("[create-appt] start_time type:", typeof start_time);
+
+    // ✅ VALIDACIÓN PREVIA
+    if (!start_time || typeof start_time !== "string") {
+      throw new Error(`Invalid start_time received: ${JSON.stringify(start_time)}`);
+    }
+
+    let startDate: Date;
+    try {
+      startDate = parseStartTime(start_time, tz);
+    } catch (parseErr) {
+      console.error("[create-appt] parseStartTime threw error:", parseErr);
+      throw new Error(`Failed to parse start_time: ${start_time}`);
+    }
+
+    // ✅ VALIDAR QUE SEA DATE REAL
+    if (!startDate || isNaN(startDate.getTime())) {
+      console.error("[create-appt] startDate invalid after parsing:", startDate);
+      throw new Error(`Parsed start_time is invalid: ${start_time}`);
+    }
+
     const endDate = new Date(startDate.getTime() + SLOT_DURATION * 60000);
+    console.log("[create-appt] Parsed UTC start:", startDate.toISOString());
 
     const startIso = startDate.toISOString();
     const endIso = endDate.toISOString();
 
     barberIdForRollback = barber_id;
     startIsoForRollback = startIso;
-
-    console.log("[create-appt] Final UTC:", startIso);
 
     // ✅ HOLD ATÓMICO
     const { data: heldSlot, error: holdErr } = await supabase
