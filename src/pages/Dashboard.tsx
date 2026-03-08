@@ -96,7 +96,6 @@ const Dashboard = () => {
         {barber?.phone_number && (barber as any).vapi_phone_number_id && (
           <div className="bg-card rounded-lg p-3 border border-border flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-primary" />
               <span className="text-sm">📞 Tu número MamaCita: <span className="font-bold gold-text">{barber.phone_number}</span></span>
             </div>
             <button
