@@ -140,9 +140,23 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const args =
+    console.log("========== RAW REQUEST BODY ==========");
+    console.log(JSON.stringify(body));
+    console.log("======================================");
+
+    let args =
       body?.message?.toolCallList?.[0]?.function?.arguments ||
       body;
+    console.log("ARGS BEFORE PARSE:", args);
+    console.log("ARGS TYPE:", typeof args);
+
+    if (typeof args === "string") {
+      console.log("Parsing string arguments...");
+      args = JSON.parse(args);
+    }
+
+    console.log("ARGS AFTER PARSE:", JSON.stringify(args));
+
     const { barber_id, customer_name, customer_phone, start_time } = args;
 
     // ✅ LOG EXACTO antes de parsear
