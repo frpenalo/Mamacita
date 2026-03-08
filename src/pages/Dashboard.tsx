@@ -166,6 +166,16 @@ const Dashboard = () => {
             </div>
           )}
         </section>
+
+        {/* Referidos */}
+        {barber && (
+          <ReferralSection
+            barberId={barber.id}
+            referralCode={barber.referral_code}
+            barberName={barber.name}
+            barberEmail={user?.email}
+          />
+        )}
       </div>
 
       {/* FAB */}
