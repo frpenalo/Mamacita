@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBarber } from '@/hooks/useBarber';
+import { useAuth } from '@/hooks/useAuth';
 import BottomNav from '@/components/BottomNav';
 import { Plus, Clock, User } from 'lucide-react';
 import logoIcon from '@/assets/logo.ico';
 import NewAppointmentDialog from '@/components/NewAppointmentDialog';
 import AppointmentActions from '@/components/AppointmentActions';
+import ReferralSection from '@/components/ReferralSection';
 
 const statusColors: Record<string, string> = {
   confirmed: 'bg-primary/20 text-primary',
@@ -26,6 +28,7 @@ const statusLabels: Record<string, string> = {
 
 const Dashboard = () => {
   const { data: barber } = useBarber();
+  const { user } = useAuth();
   const [showNewAppt, setShowNewAppt] = useState(false);
 
   const todayStart = new Date();
@@ -163,6 +166,16 @@ const Dashboard = () => {
             </div>
           )}
         </section>
+
+        {/* Referidos */}
+        {barber && (
+          <ReferralSection
+            barberId={barber.id}
+            referralCode={barber.referral_code}
+            barberName={barber.name}
+            barberEmail={user?.email}
+          />
+        )}
       </div>
 
       {/* FAB */}
