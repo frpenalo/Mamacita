@@ -29,42 +29,50 @@ const Dashboard = () => {
   const { data: barber } = useBarber();
   const [showNewAppt, setShowNewAppt] = useState(false);
 
-  const todayStart = new Date();
+  // Get today's date boundaries in EST
+  const nowInEST = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const todayStart = new Date(nowInEST);
   todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date();
+  const todayEnd = new Date(nowInEST);
   todayEnd.setHours(23, 59, 59, 999);
 
+  const todayDateStr = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+
   const { data: todayAppointments = [], refetch } = useQuery({
-    queryKey: ['appointments-today', barber?.id],
+    queryKey: ['appointments-today', barber?.id, todayDateStr],
     queryFn: async () => {
       if (!barber) return [];
       const { data, error } = await supabase
         .from('appointments')
         .select('*, customers(name, phone_number)')
         .eq('barber_id', barber.id)
-        .gte('start_time', todayStart.toISOString())
-        .lte('start_time', todayEnd.toISOString())
         .order('start_time', { ascending: true });
       if (error) throw error;
-      return data;
+      // Filter by EST date locally
+      return (data || []).filter((appt: any) => {
+        const apptDate = new Date(appt.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+        return apptDate === todayDateStr;
+      });
     },
     enabled: !!barber,
   });
 
   const { data: upcomingAppointments = [], refetch: refetchUpcoming } = useQuery({
-    queryKey: ['appointments-upcoming', barber?.id],
+    queryKey: ['appointments-upcoming', barber?.id, todayDateStr],
     queryFn: async () => {
       if (!barber) return [];
       const { data, error } = await supabase
         .from('appointments')
         .select('*, customers(name, phone_number)')
         .eq('barber_id', barber.id)
-        .gt('start_time', todayEnd.toISOString())
         .in('status', ['confirmed', 'rescheduled'])
-        .order('start_time', { ascending: true })
-        .limit(5);
+        .order('start_time', { ascending: true });
       if (error) throw error;
-      return data;
+      // Filter to future dates in EST
+      return (data || []).filter((appt: any) => {
+        const apptDate = new Date(appt.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+        return apptDate > todayDateStr;
+      }).slice(0, 5);
     },
     enabled: !!barber,
   });
