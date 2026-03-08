@@ -96,7 +96,7 @@ function parseStartTime(startTimeInput: string, tz: string): Date {
   console.log("[create-appt] Parsed wall-clock → UTC:", result.toISOString());
   return result;
 }
-const HOLD_EXPIRATION_MINUTES = 10;
+
 
 function generateCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -134,9 +134,6 @@ Deno.serve(async (req) => {
   }
 
   let supabase: any = null;
-  let barberIdForRollback: string | null = null;
-  let startIsoForRollback: string | null = null;
-  let slotHeld = false;
 
   try {
     const body = await req.json();
@@ -211,23 +208,16 @@ Deno.serve(async (req) => {
     const startIso = startDate.toISOString();
     const endIso = endDate.toISOString();
 
-    barberIdForRollback = barber_id;
-    startIsoForRollback = startIso;
-
-    // ✅ HOLD ATÓMICO
-    const { data: heldSlot, error: holdErr } = await supabase
-      .from("availability_slots")
-      .update({ status: "held" })
+    // ✅ VERIFICACIÓN DE DUPLICADOS
+    const { data: existingAppt } = await supabase
+      .from("appointments")
+      .select("id")
       .eq("barber_id", barber_id)
       .eq("start_time", startIso)
-      .eq("status", "available")
-      .select()
+      .in("status", ["confirmed", "rescheduled"])
       .maybeSingle();
 
-    if (holdErr) throw holdErr;
-    if (!heldSlot) throw new Error("Slot not available");
-
-    slotHeld = true;
+    if (existingAppt) throw new Error("Slot already booked");
 
     // ✅ CUSTOMER
     const { data: existingCustomer } = await supabase
@@ -279,17 +269,7 @@ Deno.serve(async (req) => {
 
     if (apptErr || !appointment) throw apptErr;
 
-    // ✅ CONFIRM SLOT
-    const { error: confirmErr } = await supabase
-      .from("availability_slots")
-      .update({ status: "confirmed" })
-      .eq("barber_id", barber_id)
-      .eq("start_time", startIso)
-      .eq("status", "held");
 
-    if (confirmErr) throw confirmErr;
-
-    slotHeld = false;
 
     console.log("[create-appt] Appointment confirmed:", appointmentCode);
 
@@ -306,18 +286,6 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     console.error("vapi-create-appointment error:", err);
-
-    // ✅ ROLLBACK AUTOMÁTICO
-    if (supabase && slotHeld && barberIdForRollback && startIsoForRollback) {
-      await supabase
-        .from("availability_slots")
-        .update({ status: "available" })
-        .eq("barber_id", barberIdForRollback)
-        .eq("start_time", startIsoForRollback)
-        .eq("status", "held");
-
-      console.log("[create-appt] Slot released:", startIsoForRollback);
-    }
 
     return new Response(
       JSON.stringify({ error: "Internal server error" }),
