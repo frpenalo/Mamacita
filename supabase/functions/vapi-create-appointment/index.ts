@@ -208,23 +208,16 @@ Deno.serve(async (req) => {
     const startIso = startDate.toISOString();
     const endIso = endDate.toISOString();
 
-    barberIdForRollback = barber_id;
-    startIsoForRollback = startIso;
-
-    // ✅ HOLD ATÓMICO
-    const { data: heldSlot, error: holdErr } = await supabase
-      .from("availability_slots")
-      .update({ status: "held" })
+    // ✅ VERIFICACIÓN DE DUPLICADOS
+    const { data: existingAppt } = await supabase
+      .from("appointments")
+      .select("id")
       .eq("barber_id", barber_id)
       .eq("start_time", startIso)
-      .eq("status", "available")
-      .select()
+      .in("status", ["confirmed", "rescheduled"])
       .maybeSingle();
 
-    if (holdErr) throw holdErr;
-    if (!heldSlot) throw new Error("Slot not available");
-
-    slotHeld = true;
+    if (existingAppt) throw new Error("Slot already booked");
 
     // ✅ CUSTOMER
     const { data: existingCustomer } = await supabase
