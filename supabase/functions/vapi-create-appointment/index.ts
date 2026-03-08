@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-vapi-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const SLOT_DURATION = 45; // minutes
@@ -147,6 +147,17 @@ function parseStartTime(startTimeInput: string, tz: string): Date {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Validate Vapi webhook secret
+  const vapiSecret = Deno.env.get("VAPI_WEBHOOK_SECRET");
+  const incomingSecret = req.headers.get("x-vapi-secret");
+  if (!vapiSecret || incomingSecret !== vapiSecret) {
+    console.error("Unauthorized: Invalid or missing x-vapi-secret header");
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
