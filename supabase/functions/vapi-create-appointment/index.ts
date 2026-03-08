@@ -84,16 +84,12 @@ Deno.serve(async (req) => {
     const endDate = new Date(startDate.getTime() + SLOT_DURATION * 60000);
 
     // ✅ 1️⃣ RELEASE EXPIRED HELD SLOTS
-    const expirationTime = new Date(
-      Date.now() - HOLD_EXPIRATION_MINUTES * 60 * 1000
-    ).toISOString();
-
     await supabase
       .from("availability_slots")
       .update({ status: "available" })
       .eq("barber_id", barber_id)
       .eq("status", "held")
-      .lt("updated_at", expirationTime);
+      .lt("hold_expires_at", new Date().toISOString());
 
     // ✅ 2️⃣ PREVENT OVERLAPPING BOOKINGS
     const { data: overlapping } = await supabase
