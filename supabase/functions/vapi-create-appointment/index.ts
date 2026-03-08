@@ -287,18 +287,6 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("vapi-create-appointment error:", err);
 
-    // ✅ ROLLBACK AUTOMÁTICO
-    if (supabase && slotHeld && barberIdForRollback && startIsoForRollback) {
-      await supabase
-        .from("availability_slots")
-        .update({ status: "available" })
-        .eq("barber_id", barberIdForRollback)
-        .eq("start_time", startIsoForRollback)
-        .eq("status", "held");
-
-      console.log("[create-appt] Slot released:", startIsoForRollback);
-    }
-
     return new Response(
       JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
