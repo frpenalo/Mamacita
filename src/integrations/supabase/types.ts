@@ -268,7 +268,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_barber_id_by_referral_code: {
+        Args: { code: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
