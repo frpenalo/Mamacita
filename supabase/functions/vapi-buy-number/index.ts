@@ -97,8 +97,7 @@ serve(async (req) => {
     const vapiPhoneNumberId = vapiData.id;
     console.log(`[vapi-buy-number] Extracted phoneNumber: ${phoneNumber}, id: ${vapiPhoneNumberId}`);
 
-    // Update barber record with service role client
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    // Update barber record
     const { error: updateError } = await supabaseAdmin
       .from("barbers")
       .update({
