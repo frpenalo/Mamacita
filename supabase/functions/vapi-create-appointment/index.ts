@@ -228,8 +228,9 @@ Deno.serve(async (req) => {
         .single();
 
       if (custErr || !newCustomer) {
+        console.error("[create-appt] Customer creation error:", custErr);
         return new Response(
-          JSON.stringify({ error: "Failed to create customer", detail: custErr?.message }),
+          JSON.stringify({ error: "Failed to create customer" }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -254,8 +255,9 @@ Deno.serve(async (req) => {
       .single();
 
     if (apptErr || !appointment) {
+      console.error("[create-appt] Appointment creation error:", apptErr);
       return new Response(
-        JSON.stringify({ error: "Failed to create appointment", detail: apptErr?.message }),
+        JSON.stringify({ error: "Failed to create appointment" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

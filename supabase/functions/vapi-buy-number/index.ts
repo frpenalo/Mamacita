@@ -46,6 +46,22 @@ serve(async (req) => {
       });
     }
 
+    // Verify the barber_id belongs to the authenticated user
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const { data: barberCheck } = await supabaseAdmin
+      .from("barbers")
+      .select("id")
+      .eq("id", barber_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!barberCheck) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Call Vapi to buy a phone number
     console.log(`[vapi-buy-number] Purchasing number for barber ${barber_id}, shop: ${shop_name}`);
     const vapiRes = await fetch("https://api.vapi.ai/phone-number", {
@@ -68,7 +84,8 @@ serve(async (req) => {
     console.log(`[vapi-buy-number] Vapi response status: ${vapiRes.status}`, JSON.stringify(vapiData));
 
     if (!vapiRes.ok) {
-      return new Response(JSON.stringify({ error: "Vapi API error", details: vapiData }), {
+      console.error("[vapi-buy-number] Vapi API error:", JSON.stringify(vapiData));
+      return new Response(JSON.stringify({ error: "Phone number purchase failed" }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -80,8 +97,7 @@ serve(async (req) => {
     const vapiPhoneNumberId = vapiData.id;
     console.log(`[vapi-buy-number] Extracted phoneNumber: ${phoneNumber}, id: ${vapiPhoneNumberId}`);
 
-    // Update barber record with service role client
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    // Update barber record
     const { error: updateError } = await supabaseAdmin
       .from("barbers")
       .update({
@@ -92,7 +108,7 @@ serve(async (req) => {
 
     if (updateError) {
       console.error(`[vapi-buy-number] DB update error:`, updateError);
-      return new Response(JSON.stringify({ error: "Failed to update barber", details: updateError.message }), {
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -106,7 +122,7 @@ serve(async (req) => {
     });
   } catch (err) {
     console.error(`[vapi-buy-number] Unexpected error:`, err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
