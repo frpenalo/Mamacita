@@ -228,8 +228,9 @@ Deno.serve(async (req) => {
         .single();
 
       if (custErr || !newCustomer) {
+        console.error("[create-appt] Customer creation error:", custErr);
         return new Response(
-          JSON.stringify({ error: "Failed to create customer", detail: custErr?.message }),
+          JSON.stringify({ error: "Failed to create customer" }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
