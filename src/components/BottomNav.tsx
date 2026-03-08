@@ -1,9 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Users, Settings } from 'lucide-react';
+import { Home, Users, Gift, Settings } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/dashboard', icon: Home, label: 'Inicio' },
   { to: '/clients', icon: Users, label: 'Clientes' },
+  { to: '/referrals', icon: Gift, label: 'Referidos' },
   { to: '/settings', icon: Settings, label: 'Ajustes' },
 ];
 
