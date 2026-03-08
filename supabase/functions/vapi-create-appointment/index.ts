@@ -232,83 +232,101 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ✅ 4️⃣ FIND OR CREATE CUSTOMER
-    const { data: existingCustomer } = await supabase
-      .from("customers")
-      .select("id, total_visits")
-      .eq("barber_id", barber_id)
-      .eq("phone_number", customer_phone)
-      .maybeSingle();
-
-    let customerId: string;
-
-    if (existingCustomer) {
-      customerId = existingCustomer.id;
-      await supabase
+    // Everything after hold must release slot on failure
+    try {
+      // ✅ 4️⃣ FIND OR CREATE CUSTOMER
+      const { data: existingCustomer } = await supabase
         .from("customers")
-        .update({ total_visits: (existingCustomer.total_visits || 0) + 1 })
-        .eq("id", customerId);
-    } else {
-      const { data: newCustomer, error: custErr } = await supabase
-        .from("customers")
+        .select("id, total_visits")
+        .eq("barber_id", barber_id)
+        .eq("phone_number", customer_phone)
+        .maybeSingle();
+
+      let customerId: string;
+
+      if (existingCustomer) {
+        customerId = existingCustomer.id;
+        await supabase
+          .from("customers")
+          .update({ total_visits: (existingCustomer.total_visits || 0) + 1 })
+          .eq("id", customerId);
+      } else {
+        const { data: newCustomer, error: custErr } = await supabase
+          .from("customers")
+          .insert({
+            barber_id,
+            name: customer_name,
+            phone_number: customer_phone,
+            total_visits: 1,
+          })
+          .select()
+          .single();
+
+        if (custErr || !newCustomer) {
+          throw new Error("Customer creation failed");
+        }
+        customerId = newCustomer.id;
+      }
+
+      // ✅ 5️⃣ CREATE APPOINTMENT
+      const appointmentCode = generateCode();
+
+      const { data: appointment, error } = await supabase
+        .from("appointments")
         .insert({
           barber_id,
-          name: customer_name,
-          phone_number: customer_phone,
-          total_visits: 1,
+          customer_id: customerId,
+          start_time: startDate.toISOString(),
+          end_time: endDate.toISOString(),
+          status: "confirmed",
+          appointment_code: appointmentCode,
         })
         .select()
         .single();
 
-      if (custErr || !newCustomer) {
-        throw new Error("Customer creation failed");
+      if (error || !appointment) {
+        throw new Error("Appointment creation failed");
       }
-      customerId = newCustomer.id;
+
+      // ✅ 6️⃣ CONFIRM SLOT
+      await supabase
+        .from("availability_slots")
+        .update({ status: "confirmed" })
+        .eq("barber_id", barber_id)
+        .eq("start_time", startDate.toISOString());
+
+      const spokenTime = formatTimeInTZ(startDate, tz, lang);
+
+      const confirmation =
+        lang === "es"
+          ? `Perfecto ${customer_name}. Tu cita está confirmada para las ${spokenTime}. Tu código de confirmación es ${appointmentCode}.`
+          : `Perfect ${customer_name}. Your appointment is confirmed for ${spokenTime}. Your confirmation code is ${appointmentCode}.`;
+
+      return new Response(
+        JSON.stringify({
+          results: [{
+            toolCallId: toolCallId,
+            result: confirmation,
+          }],
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+
+    } catch (innerErr) {
+      // Release the held slot back to available
+      console.error("[create-appointment] Error after slot hold, releasing slot:", innerErr);
+      await supabase
+        .from("availability_slots")
+        .update({ status: "available" })
+        .eq("barber_id", barber_id)
+        .eq("start_time", startDate.toISOString())
+        .eq("status", "held");
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
-
-    // ✅ 5️⃣ CREATE APPOINTMENT
-    const appointmentCode = generateCode();
-
-    const { data: appointment, error } = await supabase
-      .from("appointments")
-      .insert({
-        barber_id,
-        customer_id: customerId,
-        start_time: startDate.toISOString(),
-        end_time: endDate.toISOString(),
-        status: "confirmed",
-        appointment_code: appointmentCode,
-      })
-      .select()
-      .single();
-
-    if (error || !appointment) {
-      throw new Error("Appointment creation failed");
-    }
-
-    // ✅ 6️⃣ CONFIRM SLOT
-    await supabase
-      .from("availability_slots")
-      .update({ status: "confirmed" })
-      .eq("barber_id", barber_id)
-      .eq("start_time", startDate.toISOString());
-
-    const spokenTime = formatTimeInTZ(startDate, tz, lang);
-
-    const confirmation =
-      lang === "es"
-        ? `Perfecto ${customer_name}. Tu cita está confirmada para las ${spokenTime}. Tu código de confirmación es ${appointmentCode}.`
-        : `Perfect ${customer_name}. Your appointment is confirmed for ${spokenTime}. Your confirmation code is ${appointmentCode}.`;
-
-    return new Response(
-      JSON.stringify({
-        results: [{
-          toolCallId: toolCallId,
-          result: confirmation,
-        }],
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
 
   } catch (err) {
     console.error("create-appointment error:", err);
