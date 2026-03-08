@@ -196,8 +196,8 @@ Deno.serve(async (req) => {
     const messageType = body?.message?.type;
 
     if (messageType !== "assistant-request") {
-      return new Response(JSON.stringify({ error: "Unsupported message type" }), {
-        status: 400,
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

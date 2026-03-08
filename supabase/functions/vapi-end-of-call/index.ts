@@ -11,24 +11,14 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Validate Vapi webhook secret
-  const vapiSecret = Deno.env.get("VAPI_WEBHOOK_SECRET");
-  const incomingSecret = req.headers.get("x-vapi-secret");
-  if (!vapiSecret || incomingSecret !== vapiSecret) {
-    console.error("Unauthorized: Invalid or missing x-vapi-secret header");
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
   try {
     const body = await req.json();
     const messageType = body?.message?.type;
 
+    // Only process end-of-call-report; ignore all other message types
     if (messageType !== "end-of-call-report") {
-      return new Response(JSON.stringify({ error: "Unsupported message type" }), {
-        status: 400,
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
