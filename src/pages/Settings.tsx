@@ -49,10 +49,6 @@ const Settings = () => {
   const [blockReason, setBlockReason] = useState('');
   const [blockingSaving, setBlockingSaving] = useState(false);
 
-  // Vapi
-  const [vapiAssistantId, setVapiAssistantId] = useState('');
-  const [vapiPhoneNumberId, setVapiPhoneNumberId] = useState('');
-  const [vapiSaving, setVapiSaving] = useState(false);
 
   const { data: blockedTimes = [], refetch: refetchBlocked } = useQuery({
     queryKey: ['blocked-times', barber?.id],
