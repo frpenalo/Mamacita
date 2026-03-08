@@ -269,17 +269,7 @@ Deno.serve(async (req) => {
 
     if (apptErr || !appointment) throw apptErr;
 
-    // ✅ CONFIRM SLOT
-    const { error: confirmErr } = await supabase
-      .from("availability_slots")
-      .update({ status: "confirmed" })
-      .eq("barber_id", barber_id)
-      .eq("start_time", startIso)
-      .eq("status", "held");
 
-    if (confirmErr) throw confirmErr;
-
-    slotHeld = false;
 
     console.log("[create-appt] Appointment confirmed:", appointmentCode);
 
