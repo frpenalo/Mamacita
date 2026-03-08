@@ -133,11 +133,6 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const secret = req.headers.get("x-vapi-secret");
-  const expected = Deno.env.get("VAPI_SECRET");
-  if (expected && (!secret || secret !== expected)) {
-    return new Response("Unauthorized", { status: 401 });
-  }
 
   let supabase: any = null;
 
