@@ -284,6 +284,10 @@ export type Database = {
         Args: { code: string }
         Returns: string
       }
+      increment_referral_balance: {
+        Args: { amount: number; barber_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

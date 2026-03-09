@@ -8,11 +8,12 @@ import { toast } from 'sonner';
 interface ReferralSectionProps {
   barberId: string;
   referralCode: string | null;
+  referralBalance: number;
   barberName: string;
   barberEmail?: string;
 }
 
-const ReferralSection = ({ barberId, referralCode, barberName, barberEmail }: ReferralSectionProps) => {
+const ReferralSection = ({ barberId, referralCode, referralBalance, barberName, barberEmail }: ReferralSectionProps) => {
   const { data: referrals = [] } = useQuery({
     queryKey: ['referrals', barberId],
     queryFn: async () => {
@@ -27,7 +28,7 @@ const ReferralSection = ({ barberId, referralCode, barberName, barberEmail }: Re
   });
 
   const activeReferrals = referrals.filter((r: any) => r.status === 'active');
-  const balance = activeReferrals.length * 5;
+  const balance = referralBalance;
   const registerUrl = `https://tumamacita.com/register?ref=${referralCode}`;
 
   const whatsappText = encodeURIComponent(
