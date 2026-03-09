@@ -103,10 +103,7 @@ const ClientDetailDialog = ({ open, onOpenChange, client, onCreateAppointment }:
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-muted-foreground" />
                         <div>
-                          <p className="text-sm">{formatDate(appt.start_time)}</p>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Clock className="h-3 w-3" /> {formatTime(appt.start_time)}
-                          </p>
+                          <p className="text-sm text-muted-foreground">{formatAppointmentStart(appt.start_time)}</p>
                         </div>
                       </div>
                       <span className={`text-xs px-2 py-1 rounded-full ${statusColors[appt.status] || 'bg-secondary text-muted-foreground'}`}>
