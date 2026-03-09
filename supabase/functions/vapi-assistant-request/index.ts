@@ -175,6 +175,19 @@ function getSlotsForDate(
   const available: string[] = [];
   const nowMs = nowUTC.getTime();
 
+  // DEBUG: Log appointment data once
+  if (appointments.length > 0) {
+    console.log(`[getSlotsForDate] Checking ${slots.length} slots against ${appointments.length} appointments`);
+    for (const a of appointments) {
+      const aStart = new Date(a.start_time);
+      const aEnd = new Date(a.end_time);
+      console.log(`[getSlotsForDate] Appt: ${a.start_time} (${aStart.getTime()}) → ${a.end_time} (${aEnd.getTime()}) status=${a.status}`);
+    }
+    if (slots.length > 0) {
+      console.log(`[getSlotsForDate] First slot UTC: ${slots[0].startUTC.toISOString()} (${slots[0].startUTC.getTime()}) → ${slots[0].endUTC.toISOString()} (${slots[0].endUTC.getTime()})`);
+    }
+  }
+
   for (const slot of slots) {
     const sStart = slot.startUTC.getTime();
     const sEnd = slot.endUTC.getTime();
@@ -184,7 +197,11 @@ function getSlotsForDate(
     const hasAppt = appointments.some((a: any) => {
       const aStart = new Date(a.start_time).getTime();
       const aEnd = new Date(a.end_time).getTime();
-      return aStart < sEnd && aEnd > sStart;
+      const overlaps = aStart < sEnd && aEnd > sStart;
+      if (overlaps) {
+        console.log(`[getSlotsForDate] BLOCKED slot ${slot.startUTC.toISOString()} by appt ${a.start_time}`);
+      }
+      return overlaps;
     });
     if (hasAppt) continue;
 
