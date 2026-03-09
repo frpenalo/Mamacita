@@ -98,7 +98,15 @@ const Dashboard = () => {
   const handleRefresh = () => { refetch(); };
 
   const formatTime = (dateStr: string) =>
-    new Date(dateStr).toLocaleTimeString('es-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York' });
+    new Date(dateStr).toLocaleString('es-US', {
+      timeZone: 'America/New_York',
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
 
   const selectedDay = days[selectedDayIndex];
   const selectedAppointments = selectedDay ? (appointmentsByDay[selectedDay.dateStr] || []) : [];

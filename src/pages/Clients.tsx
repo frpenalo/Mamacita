@@ -38,7 +38,15 @@ const Clients = () => {
   const getLastVisit = (appointments: any[]) => {
     if (!appointments || appointments.length === 0) return '—';
     const sorted = [...appointments].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
-    return new Date(sorted[0].start_time).toLocaleDateString('es-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
+    return new Date(sorted[0].start_time).toLocaleString('es-US', {
+      timeZone: 'America/New_York',
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
   };
 
   return (
