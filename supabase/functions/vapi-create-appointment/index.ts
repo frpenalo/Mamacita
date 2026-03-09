@@ -64,7 +64,23 @@ function parseStartTime(startTimeInput: string, tz: string): Date {
   const cleanedInput = String(startTimeInput).trim();
   console.log("[create-appt] Parsing start_time cleaned:", cleanedInput);
 
-  // ✅ Try strict ISO first
+  // ✅ Try "YYYY-MM-DD H:MM AM/PM" format first (local time, NOT UTC)
+  const localMatch = cleanedInput.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)$/i);
+  if (localMatch) {
+    const year = parseInt(localMatch[1], 10);
+    const month = parseInt(localMatch[2], 10);
+    const day = parseInt(localMatch[3], 10);
+    let hours = parseInt(localMatch[4], 10);
+    const minutes = parseInt(localMatch[5], 10);
+    const ampm = localMatch[6].toUpperCase();
+    if (ampm === "PM" && hours !== 12) hours += 12;
+    if (ampm === "AM" && hours === 12) hours = 0;
+    const result = wallClockToUTC(year, month, day, hours, minutes, tz);
+    console.log("[create-appt] Parsed YYYY-MM-DD H:MM AM/PM as local →", result.toISOString());
+    return result;
+  }
+
+  // ✅ Try strict ISO
   const isoDate = new Date(cleanedInput);
   if (!isNaN(isoDate.getTime())) {
     console.log("[create-appt] Parsed as ISO:", isoDate.toISOString());
