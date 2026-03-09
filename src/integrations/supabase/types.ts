@@ -280,6 +280,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_referral: {
+        Args: { new_barber_id: string; ref_code: string }
+        Returns: undefined
+      }
       get_barber_id_by_referral_code: {
         Args: { code: string }
         Returns: string
