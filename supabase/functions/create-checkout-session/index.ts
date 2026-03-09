@@ -41,10 +41,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get barber data
+    // Get barber data including referral_balance
     const { data: barber, error: barberError } = await supabaseClient
       .from("barbers")
-      .select("id, name, shop_name, stripe_customer_id")
+      .select("id, name, shop_name, stripe_customer_id, referral_balance")
       .eq("user_id", user.id)
       .single();
 
@@ -58,14 +58,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Count active referrals for discount
-    const { count: activeReferrals } = await supabaseClient
-      .from("referrals")
-      .select("*", { count: "exact", head: true })
-      .eq("referrer_barber_id", barber.id)
-      .eq("status", "active");
-
-    const discountCents = (activeReferrals || 0) * REFERRAL_DISCOUNT_CENTS;
+    // Parse request body to get discount amount to apply
+    const { success_url, cancel_url, apply_balance } = await req.json();
+    
+    // Calculate discount from balance (user chooses how much to apply)
+    const availableBalance = Number(barber.referral_balance) || 0;
+    const discountToApply = Math.min(
+      Math.max(0, Number(apply_balance) || 0),
+      availableBalance,
+      BASE_PRICE_CENTS / 100 // Can't discount more than the price
+    );
+    const discountCents = Math.round(discountToApply * 100);
     const finalPriceCents = Math.max(0, BASE_PRICE_CENTS - discountCents);
 
     // Initialize Stripe
