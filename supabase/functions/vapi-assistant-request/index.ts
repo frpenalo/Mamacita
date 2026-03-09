@@ -329,17 +329,14 @@ Deno.serve(async (req) => {
 
     console.log(`[assistant-request] Found ${heldSlots?.length || 0} held slots`);
 
-    // Find slots across days, stop when we have at least 2 total slots
+    // Find slots across all 7 days
     const dayResults: { label: string; slots: string[] }[] = [];
-    let totalSlots = 0;
 
     for (const d of daysToCheck) {
       const slots = getSlotsForDate(d.year, d.month, d.day, workStart, workEnd, appointments || [], blockedTimes || [], heldSlots || [], nowUTC, tz);
       console.log(`[assistant-request] Day ${d.label} (${d.year}-${d.month}-${d.day}): ${slots.length} slots available`);
       if (slots.length > 0) {
         dayResults.push({ label: d.label, slots });
-        totalSlots += slots.length;
-        if (totalSlots >= 12) break;
       }
     }
 
