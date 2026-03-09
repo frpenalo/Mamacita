@@ -8,7 +8,6 @@ const corsHeaders = {
 };
 
 const BASE_PRICE_CENTS = 2500; // $25/month
-const REFERRAL_DISCOUNT_CENTS = 500; // $5 per active referral
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
