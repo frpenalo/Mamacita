@@ -17,8 +17,12 @@ Deno.serve(async (req) => {
   if (vapiSecret?.startsWith("Bearer ")) {
     vapiSecret = vapiSecret.substring(7);
   }
-  if (expected && (!vapiSecret || vapiSecret.trim() !== expected.trim())) {
-    return new Response("Unauthorized", { status: 401 });
+  // Fail-closed: reject if secret not configured OR doesn't match
+  if (!expected || !vapiSecret || vapiSecret.trim() !== expected.trim()) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { 
+      status: 401, 
+      headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    });
   }
 
   try {
