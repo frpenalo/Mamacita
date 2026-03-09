@@ -176,14 +176,8 @@ const NewAppointmentDialog = ({ open, onOpenChange, barberId, barberStart = '09:
             .eq('id', barberId)
             .single();
 
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-          await fetch(`${supabaseUrl}/functions/v1/send-whatsapp-confirmation`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_FUNCTION_SECRET || ''}`,
-            },
-            body: JSON.stringify({
+          await supabase.functions.invoke('send-whatsapp-confirmation', {
+            body: {
               customer_phone: customerPhone,
               customer_name: customerName,
               shop_name: barberInfo?.shop_name,
@@ -191,7 +185,7 @@ const NewAppointmentDialog = ({ open, onOpenChange, barberId, barberStart = '09:
               barber_phone: barberInfo?.whatsapp_number || barberInfo?.phone_number,
               start_time: selectedSlot.start.toISOString(),
               appointment_code: code,
-            }),
+            },
           });
         }
       } catch (whatsappErr) {
