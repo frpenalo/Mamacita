@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
   }
 
   const vapiSecret = req.headers.get("x-vapi-secret");
-  const expected = Deno.env.get("VAPI_SECRET");
+  const expected = Deno.env.get("VAPI_WEBHOOK_SECRET");
   if (expected && (!vapiSecret || vapiSecret !== expected)) {
     return new Response("Unauthorized", { status: 401 });
   }
