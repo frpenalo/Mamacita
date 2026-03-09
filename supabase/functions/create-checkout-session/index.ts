@@ -110,8 +110,7 @@ Deno.serve(async (req) => {
         .eq("id", barber.id);
     }
 
-    // Create checkout session
-    const { success_url, cancel_url } = await req.json();
+    // Note: We moved req.json() parsing earlier in the code
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
