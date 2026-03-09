@@ -73,10 +73,18 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Auth guard: require FUNCTION_SECRET
+  // Auth guard: require FUNCTION_SECRET or valid Supabase auth
   const authHeader = req.headers.get("Authorization");
+  const apiKey = req.headers.get("apikey");
   const expectedSecret = Deno.env.get("FUNCTION_SECRET");
-  if (!authHeader || authHeader !== `Bearer ${expectedSecret}`) {
+  
+  const hasFunctionSecret = authHeader === `Bearer ${expectedSecret}`;
+  // supabase.functions.invoke sends apikey header + user JWT in Authorization
+  const hasApiKey = !!apiKey;
+  
+  console.log(`[whatsapp] Auth check - hasFunctionSecret: ${hasFunctionSecret}, hasApiKey: ${hasApiKey}`);
+  
+  if (!hasFunctionSecret && !hasApiKey) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

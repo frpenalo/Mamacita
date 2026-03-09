@@ -165,6 +165,33 @@ const NewAppointmentDialog = ({ open, onOpenChange, barberId, barberStart = '09:
         setHoldId(null);
       }
 
+      // Send WhatsApp notification
+      try {
+        const customerPhone = selectedClient?.phone_number || newPhone;
+        const customerName = selectedClient?.name || newName;
+        if (customerPhone) {
+          const { data: barberInfo } = await supabase
+            .from('barbers')
+            .select('name, shop_name, phone_number, whatsapp_number')
+            .eq('id', barberId)
+            .single();
+
+          await supabase.functions.invoke('send-whatsapp-confirmation', {
+            body: {
+              customer_phone: customerPhone,
+              customer_name: customerName,
+              shop_name: barberInfo?.shop_name,
+              barber_name: barberInfo?.name,
+              barber_phone: barberInfo?.whatsapp_number || barberInfo?.phone_number,
+              start_time: selectedSlot.start.toISOString(),
+              appointment_code: code,
+            },
+          });
+        }
+      } catch (whatsappErr) {
+        console.error('WhatsApp notification failed:', whatsappErr);
+      }
+
       toast.success(`Cita confirmada — Código: ${code}`);
       onOpenChange(false);
       onCreated?.();
