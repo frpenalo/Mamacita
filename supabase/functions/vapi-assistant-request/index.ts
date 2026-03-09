@@ -113,6 +113,30 @@ function formatWorkingDays(days: string[] | null): string {
   return days.map((d) => DAY_LABELS[d] || d).join(", ");
 }
 
+function getTimezoneOffsetString(date: Date, tz: string): string {
+  const localParts = getDatePartsInTZ(date, tz);
+  const utcHours = date.getUTCHours();
+  const utcMinutes = date.getUTCMinutes();
+  let offsetMinutes = (localParts.hours * 60 + localParts.minutes) - (utcHours * 60 + utcMinutes);
+  if (offsetMinutes > 720) offsetMinutes -= 1440;
+  if (offsetMinutes < -720) offsetMinutes += 1440;
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absOffset = Math.abs(offsetMinutes);
+  const offH = String(Math.floor(absOffset / 60)).padStart(2, "0");
+  const offM = String(absOffset % 60).padStart(2, "0");
+  return `${sign}${offH}:${offM}`;
+}
+
+function formatISOWithOffset(date: Date, tz: string): string {
+  const parts = getDatePartsInTZ(date, tz);
+  const offset = getTimezoneOffsetString(date, tz);
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}T${String(parts.hours).padStart(2, "0")}:${String(parts.minutes).padStart(2, "0")}:00${offset}`;
+}
+
+function formatSlotWithISO(date: Date, tz: string): string {
+  return `${formatTimeAMPM(date, tz)} [${formatISOWithOffset(date, tz)}]`;
+}
+
 function getSlotsForDate(
   year: number,
   month: number,
@@ -179,7 +203,7 @@ function getSlotsForDate(
     });
     if (isHeld) continue;
 
-    available.push(formatTimeAMPM(slot.startUTC, tz));
+    available.push(formatSlotWithISO(slot.startUTC, tz));
   }
 
   return available;
