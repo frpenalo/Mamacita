@@ -339,7 +339,7 @@ Deno.serve(async (req) => {
       if (slots.length > 0) {
         dayResults.push({ label: d.label, slots });
         totalSlots += slots.length;
-        if (totalSlots >= 6) break;
+        if (totalSlots >= 12) break;
       }
     }
 
