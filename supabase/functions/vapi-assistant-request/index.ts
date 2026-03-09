@@ -203,7 +203,7 @@ function getSlotsForDate(
     });
     if (isHeld) continue;
 
-    available.push(formatTimeAMPM(slot.startUTC, tz));
+    available.push(formatSlotWithISO(slot.startUTC, tz));
   }
 
   return available;
