@@ -210,13 +210,17 @@ function getSlotsForDate(
 }
 
 Deno.serve(async (req) => {
+  console.log("[vapi-assistant-request] Request received:", req.method);
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   const vapiSecret = req.headers.get("x-vapi-secret");
   const expected = Deno.env.get("VAPI_WEBHOOK_SECRET");
+  console.log("[vapi-assistant-request] Secret header present:", !!vapiSecret, "Expected env present:", !!expected);
   if (expected && (!vapiSecret || vapiSecret !== expected)) {
+    console.log("[vapi-assistant-request] Secret mismatch! Returning 401");
     return new Response("Unauthorized", { status: 401 });
   }
 
