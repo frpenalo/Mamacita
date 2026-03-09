@@ -110,7 +110,17 @@ Deno.serve(async (req) => {
         .eq("id", barber.id);
     }
 
-    // Note: We moved req.json() parsing earlier in the code
+    // Deduct the applied balance from barber's referral_balance
+    if (discountToApply > 0) {
+      const supabaseAdmin = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      await supabaseAdmin
+        .from("barbers")
+        .update({ referral_balance: availableBalance - discountToApply })
+        .eq("id", barber.id);
+    }
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -123,11 +133,9 @@ Deno.serve(async (req) => {
             unit_amount: finalPriceCents,
             product_data: {
               name: "MamaCita Pro - Suscripción Mensual",
-              description: `$25/mes${
-                activeReferrals
-                  ? ` (-$${((activeReferrals || 0) * 5).toFixed(0)} descuento por ${activeReferrals} referido${activeReferrals > 1 ? "s" : ""})`
-                  : ""
-              }`,
+              description: discountToApply > 0
+                ? `$25/mes (-$${discountToApply.toFixed(0)} de tu balance de referidos)`
+                : "$25/mes",
             },
           },
           quantity: 1,
@@ -137,7 +145,7 @@ Deno.serve(async (req) => {
       cancel_url: cancel_url || "https://tumamacita.com/dashboard?checkout=cancel",
       metadata: {
         barber_id: barber.id,
-        active_referrals: String(activeReferrals || 0),
+        balance_applied: String(discountToApply),
       },
     });
 
