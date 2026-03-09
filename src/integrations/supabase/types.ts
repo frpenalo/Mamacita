@@ -288,6 +288,15 @@ export type Database = {
         Args: { code: string }
         Returns: string
       }
+      get_my_referrals: {
+        Args: { p_barber_id: string }
+        Returns: {
+          id: string
+          referred_name: string
+          referred_shop: string
+          status: string
+        }[]
+      }
       increment_referral_balance: {
         Args: { amount: number; barber_id: string }
         Returns: undefined
