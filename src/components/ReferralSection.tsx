@@ -18,9 +18,7 @@ const ReferralSection = ({ barberId, referralCode, referralBalance, barberName, 
     queryKey: ['referrals', barberId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('referrals')
-        .select('*, referred:referred_barber_id(name, shop_name)')
-        .eq('referrer_barber_id', barberId);
+        .rpc('get_my_referrals', { p_barber_id: barberId });
       if (error) throw error;
       return data;
     },
