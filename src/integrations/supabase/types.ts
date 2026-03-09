@@ -107,6 +107,7 @@ export type Database = {
           id: string
           name: string
           phone_number: string | null
+          referral_balance: number
           referral_code: string | null
           shop_name: string
           stripe_customer_id: string | null
@@ -128,6 +129,7 @@ export type Database = {
           id?: string
           name: string
           phone_number?: string | null
+          referral_balance?: number
           referral_code?: string | null
           shop_name: string
           stripe_customer_id?: string | null
@@ -149,6 +151,7 @@ export type Database = {
           id?: string
           name?: string
           phone_number?: string | null
+          referral_balance?: number
           referral_code?: string | null
           shop_name?: string
           stripe_customer_id?: string | null
@@ -280,6 +283,10 @@ export type Database = {
       get_barber_id_by_referral_code: {
         Args: { code: string }
         Returns: string
+      }
+      increment_referral_balance: {
+        Args: { amount: number; barber_id: string }
+        Returns: undefined
       }
     }
     Enums: {

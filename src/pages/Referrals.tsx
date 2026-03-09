@@ -20,6 +20,7 @@ const Referrals = () => {
           <ReferralSection
             barberId={barber.id}
             referralCode={barber.referral_code}
+            referralBalance={Number(barber.referral_balance) || 0}
             barberName={barber.name}
             barberEmail={user?.email}
           />

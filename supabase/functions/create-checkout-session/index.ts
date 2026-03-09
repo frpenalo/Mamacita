@@ -8,7 +8,6 @@ const corsHeaders = {
 };
 
 const BASE_PRICE_CENTS = 2500; // $25/month
-const REFERRAL_DISCOUNT_CENTS = 500; // $5 per active referral
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -41,10 +40,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get barber data
+    // Get barber data including referral_balance
     const { data: barber, error: barberError } = await supabaseClient
       .from("barbers")
-      .select("id, name, shop_name, stripe_customer_id")
+      .select("id, name, shop_name, stripe_customer_id, referral_balance")
       .eq("user_id", user.id)
       .single();
 
@@ -58,14 +57,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Count active referrals for discount
-    const { count: activeReferrals } = await supabaseClient
-      .from("referrals")
-      .select("*", { count: "exact", head: true })
-      .eq("referrer_barber_id", barber.id)
-      .eq("status", "active");
-
-    const discountCents = (activeReferrals || 0) * REFERRAL_DISCOUNT_CENTS;
+    // Parse request body to get discount amount to apply
+    const { success_url, cancel_url, apply_balance } = await req.json();
+    
+    // Calculate discount from balance (user chooses how much to apply)
+    const availableBalance = Number(barber.referral_balance) || 0;
+    const discountToApply = Math.min(
+      Math.max(0, Number(apply_balance) || 0),
+      availableBalance,
+      BASE_PRICE_CENTS / 100 // Can't discount more than the price
+    );
+    const discountCents = Math.round(discountToApply * 100);
     const finalPriceCents = Math.max(0, BASE_PRICE_CENTS - discountCents);
 
     // Initialize Stripe
@@ -108,8 +110,17 @@ Deno.serve(async (req) => {
         .eq("id", barber.id);
     }
 
-    // Create checkout session
-    const { success_url, cancel_url } = await req.json();
+    // Deduct the applied balance from barber's referral_balance
+    if (discountToApply > 0) {
+      const supabaseAdmin = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      await supabaseAdmin
+        .from("barbers")
+        .update({ referral_balance: availableBalance - discountToApply })
+        .eq("id", barber.id);
+    }
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -122,11 +133,9 @@ Deno.serve(async (req) => {
             unit_amount: finalPriceCents,
             product_data: {
               name: "MamaCita Pro - Suscripción Mensual",
-              description: `$25/mes${
-                activeReferrals
-                  ? ` (-$${((activeReferrals || 0) * 5).toFixed(0)} descuento por ${activeReferrals} referido${activeReferrals > 1 ? "s" : ""})`
-                  : ""
-              }`,
+              description: discountToApply > 0
+                ? `$25/mes (-$${discountToApply.toFixed(0)} de tu balance de referidos)`
+                : "$25/mes",
             },
           },
           quantity: 1,
@@ -136,7 +145,7 @@ Deno.serve(async (req) => {
       cancel_url: cancel_url || "https://tumamacita.com/dashboard?checkout=cancel",
       metadata: {
         barber_id: barber.id,
-        active_referrals: String(activeReferrals || 0),
+        balance_applied: String(discountToApply),
       },
     });
 
