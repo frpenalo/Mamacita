@@ -112,7 +112,6 @@ const ReferralSection = ({ barberId, referralCode, referralBalance, barberName, 
           <div className="space-y-2">
             {referrals.map((r: any) => {
               const isActive = r.status === 'active';
-              const referred = r.referred as { name: string; shop_name: string } | null;
               return (
                 <div key={r.id} className="flex items-center justify-between p-3 bg-card rounded-lg border border-border">
                   <div className="flex items-center gap-3">
@@ -120,8 +119,8 @@ const ReferralSection = ({ barberId, referralCode, referralBalance, barberName, 
                       {isActive ? <UserCheck className="h-4 w-4 text-green-400" /> : <UserX className="h-4 w-4 text-yellow-400" />}
                     </div>
                     <div>
-                      <p className="text-sm font-medium">{referred?.name || 'Referido'}</p>
-                      <p className="text-xs text-muted-foreground">{referred?.shop_name || ''}</p>
+                      <p className="text-sm font-medium">{r.referred_name || 'Referido'}</p>
+                      <p className="text-xs text-muted-foreground">{r.referred_shop || ''}</p>
                     </div>
                   </div>
                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${
