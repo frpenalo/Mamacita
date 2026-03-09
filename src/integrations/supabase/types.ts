@@ -107,6 +107,7 @@ export type Database = {
           id: string
           name: string
           phone_number: string | null
+          referral_balance: number
           referral_code: string | null
           shop_name: string
           stripe_customer_id: string | null
@@ -128,6 +129,7 @@ export type Database = {
           id?: string
           name: string
           phone_number?: string | null
+          referral_balance?: number
           referral_code?: string | null
           shop_name: string
           stripe_customer_id?: string | null
@@ -149,6 +151,7 @@ export type Database = {
           id?: string
           name?: string
           phone_number?: string | null
+          referral_balance?: number
           referral_code?: string | null
           shop_name?: string
           stripe_customer_id?: string | null
