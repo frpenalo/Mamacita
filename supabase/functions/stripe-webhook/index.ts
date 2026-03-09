@@ -123,6 +123,43 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerId = invoice.customer as string;
+
+        // Find the barber who paid
+        const { data: payingBarber } = await supabaseAdmin
+          .from("barbers")
+          .select("id")
+          .eq("stripe_customer_id", customerId)
+          .single();
+
+        if (payingBarber) {
+          // Check if this barber was referred by someone
+          const { data: referral } = await supabaseAdmin
+            .from("referrals")
+            .select("referrer_barber_id")
+            .eq("referred_barber_id", payingBarber.id)
+            .eq("status", "active")
+            .single();
+
+          if (referral) {
+            // Credit $5 to the referrer
+            const { error: rpcError } = await supabaseAdmin.rpc("increment_referral_balance", {
+              barber_id: referral.referrer_barber_id,
+              amount: 5,
+            });
+
+            if (rpcError) {
+              console.error(`[stripe-webhook] Failed to credit referrer ${referral.referrer_barber_id}:`, rpcError);
+            } else {
+              console.log(`[stripe-webhook] Credited $5 to referrer ${referral.referrer_barber_id} (from barber ${payingBarber.id})`);
+            }
+          }
+        }
+        break;
+      }
+
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
         const customerId = invoice.customer as string;
