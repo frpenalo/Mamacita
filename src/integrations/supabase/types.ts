@@ -109,6 +109,9 @@ export type Database = {
           phone_number: string | null
           referral_code: string | null
           shop_name: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subscription_status: string
           timezone: string | null
           user_id: string
           vapi_assistant_id: string | null
@@ -127,6 +130,9 @@ export type Database = {
           phone_number?: string | null
           referral_code?: string | null
           shop_name: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string
           timezone?: string | null
           user_id: string
           vapi_assistant_id?: string | null
@@ -145,6 +151,9 @@ export type Database = {
           phone_number?: string | null
           referral_code?: string | null
           shop_name?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string
           timezone?: string | null
           user_id?: string
           vapi_assistant_id?: string | null
