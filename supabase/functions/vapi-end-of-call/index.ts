@@ -11,9 +11,13 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const vapiSecret = req.headers.get("x-vapi-secret");
+  let vapiSecret = req.headers.get("x-vapi-secret");
   const expected = Deno.env.get("VAPI_WEBHOOK_SECRET");
-  if (expected && (!vapiSecret || vapiSecret !== expected)) {
+  // Strip "Bearer " prefix if present
+  if (vapiSecret?.startsWith("Bearer ")) {
+    vapiSecret = vapiSecret.substring(7);
+  }
+  if (expected && (!vapiSecret || vapiSecret.trim() !== expected.trim())) {
     return new Response("Unauthorized", { status: 401 });
   }
 

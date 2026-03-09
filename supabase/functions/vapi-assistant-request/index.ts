@@ -216,11 +216,15 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const vapiSecret = req.headers.get("x-vapi-secret");
+  let vapiSecret = req.headers.get("x-vapi-secret");
   const expected = Deno.env.get("VAPI_WEBHOOK_SECRET");
-  console.log("[vapi-assistant-request] Secret header present:", !!vapiSecret, "Expected env present:", !!expected);
-  console.log("[vapi-assistant-request] Header value (first 6):", vapiSecret?.substring(0, 6), "len:", vapiSecret?.length);
-  console.log("[vapi-assistant-request] Expected value (first 6):", expected?.substring(0, 6), "len:", expected?.length);
+  
+  // Strip "Bearer " prefix if present (Vapi sometimes sends it this way)
+  if (vapiSecret?.startsWith("Bearer ")) {
+    vapiSecret = vapiSecret.substring(7);
+  }
+  
+  console.log("[vapi-assistant-request] Secret check - header len:", vapiSecret?.length, "expected len:", expected?.length);
   if (expected && (!vapiSecret || vapiSecret.trim() !== expected.trim())) {
     console.log("[vapi-assistant-request] Secret mismatch! Returning 401");
     return new Response("Unauthorized", { status: 401 });
