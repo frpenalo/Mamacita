@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { QRCodeSVG } from 'qrcode.react';
-import { Users, DollarSign, Share2, Banknote } from 'lucide-react';
+import { Users, DollarSign, Share2, Banknote, UserCheck, UserX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -19,7 +19,7 @@ const ReferralSection = ({ barberId, referralCode, referralBalance, barberName, 
     queryFn: async () => {
       const { data, error } = await supabase
         .from('referrals')
-        .select('*')
+        .select('*, referred:referred_barber_id(name, shop_name)')
         .eq('referrer_barber_id', barberId);
       if (error) throw error;
       return data;
@@ -99,22 +99,44 @@ const ReferralSection = ({ barberId, referralCode, referralBalance, barberName, 
         </Button>
       </div>
 
-      {/* Referral list */}
-      {referrals.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider">Historial</p>
-          {referrals.map((r: any) => (
-            <div key={r.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-              <span className="text-sm">Referido</span>
-              <span className={`text-xs px-2 py-1 rounded-full ${
-                r.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
-              }`}>
-                {r.status === 'active' ? 'Activo' : 'Pendiente'}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Referral list with names */}
+      <div className="space-y-2">
+        <p className="text-sm font-semibold flex items-center gap-1.5">
+          <Users className="h-4 w-4 text-primary" /> Mis referidos
+        </p>
+        {referrals.length === 0 ? (
+          <div className="bg-card rounded-lg p-4 border border-border text-center">
+            <p className="text-sm text-muted-foreground">
+              Aún no tienes referidos. ¡Comparte tu link!
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {referrals.map((r: any) => {
+              const isActive = r.status === 'active';
+              const referred = r.referred as { name: string; shop_name: string } | null;
+              return (
+                <div key={r.id} className="flex items-center justify-between p-3 bg-card rounded-lg border border-border">
+                  <div className="flex items-center gap-3">
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center ${isActive ? 'bg-green-500/20' : 'bg-yellow-500/20'}`}>
+                      {isActive ? <UserCheck className="h-4 w-4 text-green-400" /> : <UserX className="h-4 w-4 text-yellow-400" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{referred?.name || 'Referido'}</p>
+                      <p className="text-xs text-muted-foreground">{referred?.shop_name || ''}</p>
+                    </div>
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    isActive ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+                  }`}>
+                    {isActive ? 'Activo' : 'Pendiente'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </section>
   );
 };
