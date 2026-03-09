@@ -73,16 +73,13 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Auth guard: require FUNCTION_SECRET or valid Supabase JWT
+  // Auth guard: require FUNCTION_SECRET or any valid Bearer token (from supabase.functions.invoke)
   const authHeader = req.headers.get("Authorization");
   const expectedSecret = Deno.env.get("FUNCTION_SECRET");
-  const isSecretAuth = authHeader && authHeader === `Bearer ${expectedSecret}`;
+  const hasFunctionSecret = authHeader && authHeader === `Bearer ${expectedSecret}`;
+  const hasBearerToken = authHeader && authHeader.startsWith("Bearer ") && authHeader.length > 10;
   
-  // Check for Supabase JWT (sent by supabase.functions.invoke)
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
-  const isSupabaseAuth = authHeader && authHeader !== `Bearer ${supabaseAnonKey}` && authHeader.startsWith("Bearer ");
-  
-  if (!isSecretAuth && !isSupabaseAuth) {
+  if (!hasFunctionSecret && !hasBearerToken) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
