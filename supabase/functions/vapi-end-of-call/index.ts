@@ -11,6 +11,11 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const vapiSecret = req.headers.get("x-vapi-secret");
+  const expected = Deno.env.get("VAPI_SECRET");
+  if (expected && (!vapiSecret || vapiSecret !== expected)) {
+    return new Response("Unauthorized", { status: 401 });
+  }
 
   try {
     const body = await req.json();
