@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { User, Phone, Calendar, Clock, Plus } from 'lucide-react';
+import { User, Phone, Calendar, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -47,8 +47,15 @@ const ClientDetailDialog = ({ open, onOpenChange, client, onCreateAppointment }:
 
   if (!client) return null;
 
-  const formatDate = (d: string) => new Date(d).toLocaleDateString('es-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/New_York' });
-  const formatTime = (d: string) => new Date(d).toLocaleTimeString('es-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York' });
+  const formatAppointmentStart = (d: string) => new Date(d).toLocaleString('es-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -96,10 +103,7 @@ const ClientDetailDialog = ({ open, onOpenChange, client, onCreateAppointment }:
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-muted-foreground" />
                         <div>
-                          <p className="text-sm">{formatDate(appt.start_time)}</p>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Clock className="h-3 w-3" /> {formatTime(appt.start_time)}
-                          </p>
+                          <p className="text-sm text-muted-foreground">{formatAppointmentStart(appt.start_time)}</p>
                         </div>
                       </div>
                       <span className={`text-xs px-2 py-1 rounded-full ${statusColors[appt.status] || 'bg-secondary text-muted-foreground'}`}>
