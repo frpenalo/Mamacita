@@ -300,11 +300,11 @@ Deno.serve(async (req) => {
     // Fetch appointments
     const { data: appointments } = await supabase
       .from("appointments")
-      .select("start_time, end_time")
+      .select("start_time, end_time, status")
       .eq("barber_id", barber.id)
       .in("status", ["confirmed", "rescheduled"])
-      .gte("start_time", queryStartUTC)
-      .lte("start_time", queryEndUTC);
+      .lte("start_time", queryEndUTC)
+      .gte("end_time", queryStartUTC);
 
     console.log(`[assistant-request] Found ${appointments?.length || 0} appointments`);
 
@@ -339,7 +339,7 @@ Deno.serve(async (req) => {
       if (slots.length > 0) {
         dayResults.push({ label: d.label, slots });
         totalSlots += slots.length;
-        if (totalSlots >= 6) break;
+        if (totalSlots >= 12) break;
       }
     }
 
