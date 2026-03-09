@@ -204,23 +204,6 @@ function getSlotsForDate(
     if (isHeld) continue;
 
     available.push(formatSlotWithISO(slot.startUTC, tz));
-
-    const isBlocked = blockedTimes.some((b: any) => {
-      const bStart = new Date(b.start_time).getTime();
-      const bEnd = new Date(b.end_time).getTime();
-      return bStart < sEnd && bEnd > sStart;
-    });
-    if (isBlocked) continue;
-
-    const isHeld = heldSlots.some((h: any) => {
-      if (h.hold_expires_at && new Date(h.hold_expires_at).getTime() < nowMs) return false;
-      const hStart = new Date(h.start_time).getTime();
-      const hEnd = new Date(h.end_time).getTime();
-      return hStart < sEnd && hEnd > sStart;
-    });
-    if (isHeld) continue;
-
-    available.push(formatSlotWithISO(slot.startUTC, tz));
   }
 
   return available;
