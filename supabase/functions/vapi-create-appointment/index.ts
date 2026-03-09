@@ -286,9 +286,44 @@ Deno.serve(async (req) => {
 
     if (apptErr || !appointment) throw apptErr;
 
-
-
     console.log("[create-appt] Appointment confirmed:", appointmentCode);
+
+    // ✅ SEND WHATSAPP CONFIRMATION
+    try {
+      const { data: barberInfo } = await supabase
+        .from("barbers")
+        .select("name, shop_name, phone_number, whatsapp_number")
+        .eq("id", barber_id)
+        .maybeSingle();
+
+      const functionSecret = Deno.env.get("FUNCTION_SECRET");
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+
+      const whatsappRes = await fetch(
+        `${supabaseUrl}/functions/v1/send-whatsapp-confirmation`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${functionSecret}`,
+          },
+          body: JSON.stringify({
+            customer_phone,
+            customer_name,
+            shop_name: barberInfo?.shop_name || "",
+            barber_name: barberInfo?.name || "",
+            barber_phone: barberInfo?.whatsapp_number || barberInfo?.phone_number || "",
+            start_time: startIso,
+            appointment_code: appointmentCode,
+          }),
+        }
+      );
+
+      const whatsappData = await whatsappRes.json();
+      console.log("[create-appt] WhatsApp result:", JSON.stringify(whatsappData));
+    } catch (whatsappErr) {
+      console.error("[create-appt] WhatsApp notification failed (non-blocking):", whatsappErr);
+    }
 
     const toolCallId = body?.message?.toolCallList?.[0]?.id;
 
