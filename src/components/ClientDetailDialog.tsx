@@ -47,8 +47,15 @@ const ClientDetailDialog = ({ open, onOpenChange, client, onCreateAppointment }:
 
   if (!client) return null;
 
-  const formatDate = (d: string) => new Date(d).toLocaleDateString('es-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/New_York' });
-  const formatTime = (d: string) => new Date(d).toLocaleTimeString('es-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York' });
+  const formatAppointmentStart = (d: string) => new Date(d).toLocaleString('es-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
