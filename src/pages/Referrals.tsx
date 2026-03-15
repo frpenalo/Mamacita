@@ -1,12 +1,10 @@
 import { useBarber } from '@/hooks/useBarber';
-import { useAuth } from '@/hooks/useAuth';
 import BottomNav from '@/components/BottomNav';
 import ReferralSection from '@/components/ReferralSection';
 import logoIcon from '@/assets/logo.ico';
 
 const Referrals = () => {
   const { data: barber } = useBarber();
-  const { user } = useAuth();
 
   return (
     <div className="min-h-screen pb-20">
@@ -20,9 +18,8 @@ const Referrals = () => {
           <ReferralSection
             barberId={barber.id}
             referralCode={barber.referral_code}
-            referralBalance={Number(barber.referral_balance) || 0}
+            referralCredits={Number(barber.referral_credits) || 0}
             barberName={barber.name}
-            barberEmail={user?.email}
           />
         ) : (
           <div className="bg-card rounded-lg p-6 text-center">
