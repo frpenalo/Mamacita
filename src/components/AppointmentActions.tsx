@@ -18,10 +18,11 @@ interface Props {
   barberId: string;
   barberStart?: string;
   barberEnd?: string;
+  appointmentDuration?: number;
   onUpdated: () => void;
 }
 
-const AppointmentActions = ({ appointment, barberId, barberStart = '09:00', barberEnd = '18:00', onUpdated }: Props) => {
+const AppointmentActions = ({ appointment, barberId, barberStart = '09:00', barberEnd = '18:00', appointmentDuration = 45, onUpdated }: Props) => {
   const [showReschedule, setShowReschedule] = useState(false);
   const [date, setDate] = useState<Date | undefined>();
   const [slots, setSlots] = useState<TimeSlot[]>([]);
