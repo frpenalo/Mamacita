@@ -1,19 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { QRCodeSVG } from 'qrcode.react';
-import { Users, DollarSign, Share2, Banknote, UserCheck, UserX } from 'lucide-react';
+import { Users, CreditCard, Share2, UserCheck, UserX, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
 
 interface ReferralSectionProps {
   barberId: string;
   referralCode: string | null;
-  referralBalance: number;
+  referralCredits: number;
   barberName: string;
-  barberEmail?: string;
 }
 
-const ReferralSection = ({ barberId, referralCode, referralBalance, barberName, barberEmail }: ReferralSectionProps) => {
+const ReferralSection = ({ barberId, referralCode, referralCredits, barberName }: ReferralSectionProps) => {
   const { data: referrals = [] } = useQuery({
     queryKey: ['referrals', barberId],
     queryFn: async () => {
@@ -26,23 +24,13 @@ const ReferralSection = ({ barberId, referralCode, referralBalance, barberName, 
   });
 
   const activeReferrals = referrals.filter((r: any) => r.status === 'active');
-  const balance = referralBalance;
+  const credits = referralCredits;
   const registerUrl = `https://tumamacita.com/register?ref=${referralCode}`;
 
   const whatsappText = encodeURIComponent(
     `Únete a MamaCita y automatiza tu barbería con IA. Regístrate aquí: ${registerUrl}`
   );
   const whatsappUrl = `https://wa.me/?text=${whatsappText}`;
-
-  const handleCashOut = () => {
-    if (balance < 50) return;
-    const subject = encodeURIComponent(`Solicitud de Cash Out - ${barberName}`);
-    const body = encodeURIComponent(
-      `Hola,\n\nSolicito el retiro de mi balance de referidos.\n\nNombre: ${barberName}\nEmail: ${barberEmail || 'N/A'}\nReferidos activos: ${activeReferrals.length}\nBalance: $${balance}\nCódigo de referido: ${referralCode}\n\nGracias.`
-    );
-    window.open(`mailto:admin@tumamacita.com?subject=${subject}&body=${body}`, '_blank');
-    toast.success('Se abrió tu cliente de correo para enviar la solicitud');
-  };
 
   if (!referralCode) return null;
 
@@ -63,7 +51,7 @@ const ReferralSection = ({ barberId, referralCode, referralBalance, barberName, 
         <p className="text-xs font-mono text-primary">{referralCode}</p>
       </div>
 
-      {/* Stats */}
+      {/* Credits & Stats */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-lg p-4 border border-border text-center">
           <Users className="h-5 w-5 text-primary mx-auto mb-1" />
@@ -71,33 +59,38 @@ const ReferralSection = ({ barberId, referralCode, referralBalance, barberName, 
           <p className="text-xs text-muted-foreground">Referidos activos</p>
         </div>
         <div className="bg-card rounded-lg p-4 border border-border text-center">
-          <DollarSign className="h-5 w-5 text-green-400 mx-auto mb-1" />
-          <p className="text-2xl font-bold gold-text">${balance}</p>
-          <p className="text-xs text-muted-foreground">Balance</p>
+          <Gift className="h-5 w-5 text-green-400 mx-auto mb-1" />
+          <p className="text-2xl font-bold gold-text">${credits.toFixed(2)}</p>
+          <p className="text-xs text-muted-foreground">Crédito acumulado</p>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="space-y-2">
-        <Button
-          onClick={() => window.open(whatsappUrl, '_blank')}
-          className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold"
-        >
-          <Share2 className="mr-2 h-4 w-4" /> Compartir por WhatsApp
-        </Button>
+      {/* Credit info */}
+      {credits > 0 && (
+        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 flex items-start gap-2">
+          <CreditCard className="h-4 w-4 text-green-400 mt-0.5 shrink-0" />
+          <p className="text-sm text-green-300">
+            Se descontarán <span className="font-bold">${credits.toFixed(2)}</span> de tu próximo cobro mensual.
+          </p>
+        </div>
+      )}
 
-        <Button
-          onClick={handleCashOut}
-          variant="outline"
-          className="w-full border-primary text-primary"
-          disabled={balance < 50}
-        >
-          <Banknote className="mr-2 h-4 w-4" />
-          {balance < 50 ? `Cash Out (mín. $50)` : `Solicitar Cash Out ($${balance})`}
-        </Button>
+      {/* How it works */}
+      <div className="bg-card rounded-lg p-3 border border-border">
+        <p className="text-xs text-muted-foreground">
+          💡 Por cada referido que complete su 2do mes de pago, recibes <span className="text-primary font-semibold">$10 de crédito</span> que se aplica automáticamente a tu próximo cobro.
+        </p>
       </div>
 
-      {/* Referral list with names */}
+      {/* Share */}
+      <Button
+        onClick={() => window.open(whatsappUrl, '_blank')}
+        className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold"
+      >
+        <Share2 className="mr-2 h-4 w-4" /> Compartir por WhatsApp
+      </Button>
+
+      {/* Referral list */}
       <div className="space-y-2">
         <p className="text-sm font-semibold flex items-center gap-1.5">
           <Users className="h-4 w-4 text-primary" /> Mis referidos
