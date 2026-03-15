@@ -109,6 +109,7 @@ export type Database = {
           phone_number: string | null
           referral_balance: number
           referral_code: string | null
+          referral_credits: number
           shop_name: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -131,6 +132,7 @@ export type Database = {
           phone_number?: string | null
           referral_balance?: number
           referral_code?: string | null
+          referral_credits?: number
           shop_name: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -153,6 +155,7 @@ export type Database = {
           phone_number?: string | null
           referral_balance?: number
           referral_code?: string | null
+          referral_credits?: number
           shop_name?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -238,6 +241,7 @@ export type Database = {
       }
       referrals: {
         Row: {
+          credit_paid: boolean
           id: string
           monthly_reward: number | null
           referred_barber_id: string
@@ -245,6 +249,7 @@ export type Database = {
           status: string | null
         }
         Insert: {
+          credit_paid?: boolean
           id?: string
           monthly_reward?: number | null
           referred_barber_id: string
@@ -252,6 +257,7 @@ export type Database = {
           status?: string | null
         }
         Update: {
+          credit_paid?: boolean
           id?: string
           monthly_reward?: number | null
           referred_barber_id?: string
