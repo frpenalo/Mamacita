@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowRight, ArrowLeft, Check, Phone, Copy } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import logoIcon from '@/assets/logo.ico';
 import { toast } from 'sonner';
 
@@ -36,6 +37,8 @@ const Onboarding = () => {
   const [workingDays, setWorkingDays] = useState<string[]>([]);
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('18:00');
+  const [differentWhatsapp, setDifferentWhatsapp] = useState(false);
+  const [whatsappNumber, setWhatsappNumber] = useState('');
 
   const toggleDay = (day: string) => {
     setWorkingDays((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]);
@@ -62,9 +65,11 @@ const Onboarding = () => {
       shop_name: shopName,
       address,
       phone_number: phone,
+      whatsapp_number: differentWhatsapp ? whatsappNumber : phone,
       working_days: workingDays,
       working_hours_start: startTime,
       working_hours_end: endTime,
+      vapi_assistant_id: '155157c5-6884-4fb2-a734-de26675ed69e',
     }).select('id').single();
 
     if (error) {
@@ -127,6 +132,16 @@ const Onboarding = () => {
               <Label>Teléfono principal</Label>
               <Input placeholder="+1 234 567 8900" value={phone} onChange={(e) => setPhone(e.target.value)} />
             </div>
+            <div className="flex items-center justify-between p-3 rounded-lg bg-secondary">
+              <Label className="cursor-pointer">¿Tu número de WhatsApp es diferente al de teléfono?</Label>
+              <Switch checked={differentWhatsapp} onCheckedChange={setDifferentWhatsapp} />
+            </div>
+            {differentWhatsapp && (
+              <div className="space-y-2">
+                <Label>Número de WhatsApp</Label>
+                <Input placeholder="+1 234 567 8900" value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} />
+              </div>
+            )}
             <Button onClick={() => setStep(2)} className="w-full gold-gradient text-primary-foreground font-semibold" disabled={!name || !shopName}>
               Siguiente <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
