@@ -77,6 +77,7 @@ const Settings = () => {
       setWorkingDays(barber.working_days || []);
       setStartTime(barber.working_hours_start || '09:00');
       setEndTime(barber.working_hours_end || '18:00');
+      setAppointmentDuration(String((barber as any).appointment_duration || 45));
     }
   }, [barber]);
 
