@@ -40,6 +40,7 @@ const Settings = () => {
   const [workingDays, setWorkingDays] = useState<string[]>([]);
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('18:00');
+  const [appointmentDuration, setAppointmentDuration] = useState('45');
   const [saving, setSaving] = useState(false);
 
   // Blocked times
