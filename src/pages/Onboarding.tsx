@@ -132,6 +132,16 @@ const Onboarding = () => {
               <Label>Teléfono principal</Label>
               <Input placeholder="+1 234 567 8900" value={phone} onChange={(e) => setPhone(e.target.value)} />
             </div>
+            <div className="flex items-center justify-between p-3 rounded-lg bg-secondary">
+              <Label className="cursor-pointer">¿Tu número de WhatsApp es diferente al de teléfono?</Label>
+              <Switch checked={differentWhatsapp} onCheckedChange={setDifferentWhatsapp} />
+            </div>
+            {differentWhatsapp && (
+              <div className="space-y-2">
+                <Label>Número de WhatsApp</Label>
+                <Input placeholder="+1 234 567 8900" value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} />
+              </div>
+            )}
             <Button onClick={() => setStep(2)} className="w-full gold-gradient text-primary-foreground font-semibold" disabled={!name || !shopName}>
               Siguiente <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
