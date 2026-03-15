@@ -91,6 +91,7 @@ const Settings = () => {
     const { error } = await supabase.from('barbers').update({
       name, shop_name: shopName, address, phone_number: phone,
       working_days: workingDays, working_hours_start: startTime, working_hours_end: endTime,
+      appointment_duration: parseInt(appointmentDuration, 10),
     }).eq('id', barber.id);
     setSaving(false);
     if (error) toast.error('Error al guardar');
