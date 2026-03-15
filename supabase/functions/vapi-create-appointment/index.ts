@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-vapi-secret",
 };
 
-const SLOT_DURATION = 45; // minutes
+let SLOT_DURATION = 45; // minutes — overridden per barber
 
 function getDatePartsInTZ(date: Date, tz: string) {
   const formatter = new Intl.DateTimeFormat("en-US", {
