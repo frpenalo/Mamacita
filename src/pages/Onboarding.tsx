@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowRight, ArrowLeft, Check, Phone, Copy } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import logoIcon from '@/assets/logo.ico';
 import { toast } from 'sonner';
 
