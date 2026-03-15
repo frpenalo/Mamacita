@@ -1,0 +1,1 @@
+ALTER TABLE public.barbers ADD COLUMN IF NOT EXISTS appointment_duration integer NOT NULL DEFAULT 45;

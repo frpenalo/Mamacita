@@ -103,6 +103,7 @@ export type Database = {
       barbers: {
         Row: {
           address: string | null
+          appointment_duration: number
           created_at: string | null
           id: string
           name: string
@@ -126,6 +127,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          appointment_duration?: number
           created_at?: string | null
           id?: string
           name: string
@@ -149,6 +151,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          appointment_duration?: number
           created_at?: string | null
           id?: string
           name?: string
