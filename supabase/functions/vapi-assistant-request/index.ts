@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-vapi-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SLOT_DURATION = 45; // minutes
+let SLOT_DURATION = 45; // minutes — overridden per barber
 
 /**
  * Get current date/time in a specific IANA timezone using Intl.DateTimeFormat.
@@ -279,6 +279,7 @@ Deno.serve(async (req) => {
     const workStart = barber.working_hours_start || "09:00";
     const workEnd = barber.working_hours_end || "18:00";
     const tz = barber.timezone || "America/New_York";
+    SLOT_DURATION = barber.appointment_duration || 45;
 
     const nowUTC = new Date();
     const nowParts = getDatePartsInTZ(nowUTC, tz);

@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowRight, ArrowLeft, Check, Phone, Copy } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import logoIcon from '@/assets/logo.ico';
 import { toast } from 'sonner';
 
@@ -39,6 +40,7 @@ const Onboarding = () => {
   const [endTime, setEndTime] = useState('18:00');
   const [differentWhatsapp, setDifferentWhatsapp] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [appointmentDuration, setAppointmentDuration] = useState('45');
 
   const toggleDay = (day: string) => {
     setWorkingDays((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]);
@@ -69,6 +71,7 @@ const Onboarding = () => {
       working_days: workingDays,
       working_hours_start: startTime,
       working_hours_end: endTime,
+      appointment_duration: parseInt(appointmentDuration, 10),
       vapi_assistant_id: '155157c5-6884-4fb2-a734-de26675ed69e',
     }).select('id').single();
 
@@ -172,6 +175,21 @@ const Onboarding = () => {
                 <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label>¿Cuánto dura cada cita?</Label>
+              <Select value={appointmentDuration} onValueChange={setAppointmentDuration}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">15 minutos</SelectItem>
+                  <SelectItem value="30">30 minutos</SelectItem>
+                  <SelectItem value="45">45 minutos</SelectItem>
+                  <SelectItem value="60">60 minutos</SelectItem>
+                  <SelectItem value="90">90 minutos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Atrás
@@ -193,6 +211,7 @@ const Onboarding = () => {
               <div><span className="text-muted-foreground text-sm">Teléfono:</span> <span className="font-medium">{phone || '—'}</span></div>
               <div><span className="text-muted-foreground text-sm">Días:</span> <span className="font-medium">{workingDays.join(', ') || '—'}</span></div>
               <div><span className="text-muted-foreground text-sm">Horario:</span> <span className="font-medium">{startTime} - {endTime}</span></div>
+              <div><span className="text-muted-foreground text-sm">Duración de cita:</span> <span className="font-medium">{appointmentDuration} min</span></div>
             </div>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setStep(2)} className="flex-1">

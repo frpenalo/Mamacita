@@ -11,7 +11,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { LogOut, CalendarIcon, Ban, Trash2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { LogOut, CalendarIcon, Ban, Trash2, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -39,6 +40,7 @@ const Settings = () => {
   const [workingDays, setWorkingDays] = useState<string[]>([]);
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('18:00');
+  const [appointmentDuration, setAppointmentDuration] = useState('45');
   const [saving, setSaving] = useState(false);
 
   // Blocked times
@@ -75,6 +77,7 @@ const Settings = () => {
       setWorkingDays(barber.working_days || []);
       setStartTime(barber.working_hours_start || '09:00');
       setEndTime(barber.working_hours_end || '18:00');
+      setAppointmentDuration(String((barber as any).appointment_duration || 45));
     }
   }, [barber]);
 
@@ -88,6 +91,7 @@ const Settings = () => {
     const { error } = await supabase.from('barbers').update({
       name, shop_name: shopName, address, phone_number: phone,
       working_days: workingDays, working_hours_start: startTime, working_hours_end: endTime,
+      appointment_duration: parseInt(appointmentDuration, 10),
     }).eq('id', barber.id);
     setSaving(false);
     if (error) toast.error('Error al guardar');
@@ -173,6 +177,30 @@ const Settings = () => {
           <Button onClick={handleSave} className="w-full gold-gradient text-primary-foreground font-semibold" disabled={saving}>
             {saving ? 'Guardando...' : 'Guardar cambios'}
           </Button>
+
+          <Separator />
+
+          {/* Appointment duration */}
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" /> Configuración de citas
+            </h2>
+            <div className="space-y-2">
+              <Label>Duración de cada cita</Label>
+              <Select value={appointmentDuration} onValueChange={setAppointmentDuration}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">15 minutos</SelectItem>
+                  <SelectItem value="30">30 minutos</SelectItem>
+                  <SelectItem value="45">45 minutos</SelectItem>
+                  <SelectItem value="60">60 minutos</SelectItem>
+                  <SelectItem value="90">90 minutos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
           <Separator />
 
