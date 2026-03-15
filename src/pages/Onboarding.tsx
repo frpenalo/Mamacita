@@ -175,6 +175,21 @@ const Onboarding = () => {
                 <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label>¿Cuánto dura cada cita?</Label>
+              <Select value={appointmentDuration} onValueChange={setAppointmentDuration}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">15 minutos</SelectItem>
+                  <SelectItem value="30">30 minutos</SelectItem>
+                  <SelectItem value="45">45 minutos</SelectItem>
+                  <SelectItem value="60">60 minutos</SelectItem>
+                  <SelectItem value="90">90 minutos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Atrás
