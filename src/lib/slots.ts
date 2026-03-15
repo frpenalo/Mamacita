@@ -1,7 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
 
-const SLOT_DURATION = 45; // minutes
-
 export interface TimeSlot {
   start: Date;
   end: Date;
