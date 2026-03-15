@@ -70,6 +70,7 @@ const Onboarding = () => {
       working_days: workingDays,
       working_hours_start: startTime,
       working_hours_end: endTime,
+      appointment_duration: parseInt(appointmentDuration, 10),
       vapi_assistant_id: '155157c5-6884-4fb2-a734-de26675ed69e',
     }).select('id').single();
 
