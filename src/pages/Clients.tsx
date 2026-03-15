@@ -117,6 +117,7 @@ const Clients = () => {
         barberId={barber?.id}
         barberStart={barber?.working_hours_start || '09:00'}
         barberEnd={barber?.working_hours_end || '18:00'}
+        appointmentDuration={(barber as any)?.appointment_duration || 45}
         preselectedClient={apptClient}
         onCreated={() => { setShowNewAppt(false); setApptClient(null); }}
       />

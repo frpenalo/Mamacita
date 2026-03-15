@@ -64,7 +64,7 @@ const NewAppointmentDialog = ({ open, onOpenChange, barberId, barberStart = '09:
     if (!barberId || !date) { setSlots([]); return; }
     setLoadingSlots(true);
     setSelectedSlot(null);
-    getAvailableSlots(barberId, date, barberStart, barberEnd)
+    getAvailableSlots(barberId, date, barberStart, barberEnd, appointmentDuration)
       .then(setSlots)
       .finally(() => setLoadingSlots(false));
   }, [barberId, date, barberStart, barberEnd]);

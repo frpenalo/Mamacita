@@ -40,7 +40,7 @@ const AppointmentActions = ({ appointment, barberId, barberStart = '09:00', barb
     setDate(d);
     setSelectedSlot(null);
     setLoadingSlots(true);
-    const s = await getAvailableSlots(barberId, d, barberStart, barberEnd);
+    const s = await getAvailableSlots(barberId, d, barberStart, barberEnd, appointmentDuration);
     setSlots(s);
     setLoadingSlots(false);
   };
