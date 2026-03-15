@@ -37,6 +37,8 @@ const Onboarding = () => {
   const [workingDays, setWorkingDays] = useState<string[]>([]);
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('18:00');
+  const [differentWhatsapp, setDifferentWhatsapp] = useState(false);
+  const [whatsappNumber, setWhatsappNumber] = useState('');
 
   const toggleDay = (day: string) => {
     setWorkingDays((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]);
