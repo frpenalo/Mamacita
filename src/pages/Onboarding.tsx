@@ -211,6 +211,7 @@ const Onboarding = () => {
               <div><span className="text-muted-foreground text-sm">Teléfono:</span> <span className="font-medium">{phone || '—'}</span></div>
               <div><span className="text-muted-foreground text-sm">Días:</span> <span className="font-medium">{workingDays.join(', ') || '—'}</span></div>
               <div><span className="text-muted-foreground text-sm">Horario:</span> <span className="font-medium">{startTime} - {endTime}</span></div>
+              <div><span className="text-muted-foreground text-sm">Duración de cita:</span> <span className="font-medium">{appointmentDuration} min</span></div>
             </div>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setStep(2)} className="flex-1">

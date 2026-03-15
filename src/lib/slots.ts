@@ -11,7 +11,9 @@ export async function getAvailableSlots(
   date: Date,
   workStart: string,
   workEnd: string,
+  slotDuration: number = 45,
 ): Promise<TimeSlot[]> {
+  const SLOT_DURATION = slotDuration;
   // Normalize time format - DB may return "09:00:00", we need HH and MM
   const parseTime = (t: string) => {
     const parts = t.split(':');

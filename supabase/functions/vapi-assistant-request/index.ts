@@ -279,6 +279,7 @@ Deno.serve(async (req) => {
     const workStart = barber.working_hours_start || "09:00";
     const workEnd = barber.working_hours_end || "18:00";
     const tz = barber.timezone || "America/New_York";
+    SLOT_DURATION = barber.appointment_duration || 45;
 
     const nowUTC = new Date();
     const nowParts = getDatePartsInTZ(nowUTC, tz);

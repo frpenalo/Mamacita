@@ -180,6 +180,30 @@ const Settings = () => {
 
           <Separator />
 
+          {/* Appointment duration */}
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" /> Configuración de citas
+            </h2>
+            <div className="space-y-2">
+              <Label>Duración de cada cita</Label>
+              <Select value={appointmentDuration} onValueChange={setAppointmentDuration}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">15 minutos</SelectItem>
+                  <SelectItem value="30">30 minutos</SelectItem>
+                  <SelectItem value="45">45 minutos</SelectItem>
+                  <SelectItem value="60">60 minutos</SelectItem>
+                  <SelectItem value="90">90 minutos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <Separator />
+
           {/* Blocked times */}
           <div className="space-y-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">

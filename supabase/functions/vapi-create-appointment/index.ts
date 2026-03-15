@@ -203,11 +203,12 @@ Deno.serve(async (req) => {
 
     const { data: barber } = await supabase
       .from("barbers")
-      .select("timezone")
+      .select("timezone, appointment_duration")
       .eq("id", barber_id)
       .maybeSingle();
 
     const tz = barber?.timezone || "America/New_York";
+    SLOT_DURATION = barber?.appointment_duration || 45;
 
     // ✅ LOG ULTRA DETALLADO
     console.log("[create-appt] start_time raw value:", start_time);
