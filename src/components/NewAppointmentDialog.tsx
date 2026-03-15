@@ -20,11 +20,12 @@ interface Props {
   barberId?: string;
   barberStart?: string;
   barberEnd?: string;
+  appointmentDuration?: number;
   preselectedClient?: any;
   onCreated?: () => void;
 }
 
-const NewAppointmentDialog = ({ open, onOpenChange, barberId, barberStart = '09:00', barberEnd = '18:00', preselectedClient, onCreated }: Props) => {
+const NewAppointmentDialog = ({ open, onOpenChange, barberId, barberStart = '09:00', barberEnd = '18:00', appointmentDuration = 45, preselectedClient, onCreated }: Props) => {
   // Client
   const [clientSearch, setClientSearch] = useState('');
   const [clients, setClients] = useState<any[]>([]);
