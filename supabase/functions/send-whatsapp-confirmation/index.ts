@@ -68,6 +68,47 @@ async function sendWhatsApp(
   }
 }
 
+async function sendWhatsAppTemplate(
+  accountSid: string,
+  authToken: string,
+  from: string,
+  to: string,
+  contentSid: string,
+  contentVariables: Record<string, string>
+): Promise<{ success: boolean; sid?: string; error?: string }> {
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+  const auth = btoa(`${accountSid}:${authToken}`);
+
+  const params = new URLSearchParams();
+  params.append("From", from);
+  params.append("To", to);
+  params.append("ContentSid", contentSid);
+  params.append("ContentVariables", JSON.stringify(contentVariables));
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      console.log(`[whatsapp] Template sent to ${to}, SID: ${data.sid}`);
+      return { success: true, sid: data.sid };
+    } else {
+      console.error(`[whatsapp] Template failed to ${to}:`, data);
+      return { success: false, error: data.message || "Unknown error" };
+    }
+  } catch (err) {
+    console.error(`[whatsapp] Template error to ${to}:`, err);
+    return { success: false, error: String(err) };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
