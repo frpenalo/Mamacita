@@ -68,6 +68,47 @@ async function sendWhatsApp(
   }
 }
 
+async function sendWhatsAppTemplate(
+  accountSid: string,
+  authToken: string,
+  from: string,
+  to: string,
+  contentSid: string,
+  contentVariables: Record<string, string>
+): Promise<{ success: boolean; sid?: string; error?: string }> {
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+  const auth = btoa(`${accountSid}:${authToken}`);
+
+  const params = new URLSearchParams();
+  params.append("From", from);
+  params.append("To", to);
+  params.append("ContentSid", contentSid);
+  params.append("ContentVariables", JSON.stringify(contentVariables));
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      console.log(`[whatsapp] Template sent to ${to}, SID: ${data.sid}`);
+      return { success: true, sid: data.sid };
+    } else {
+      console.error(`[whatsapp] Template failed to ${to}:`, data);
+      return { success: false, error: data.message || "Unknown error" };
+    }
+  } catch (err) {
+    console.error(`[whatsapp] Template error to ${to}:`, err);
+    return { success: false, error: String(err) };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -135,17 +176,21 @@ Deno.serve(async (req) => {
       customerMsg
     );
 
-    // Message to barber (if phone provided)
+    // Message to barber using template (if phone provided)
     let barberResult = { success: false, error: "No barber phone provided" };
     if (barber_phone) {
-      const barberMsg = `Nueva cita agendada 📅\n\n👤 Cliente: ${customer_name}\n📞 Teléfono: ${customer_phone}\n🕐 Hora: ${formattedDate}\n🔑 Código: ${appointment_code}`;
-
-      barberResult = await sendWhatsApp(
+      barberResult = await sendWhatsAppTemplate(
         accountSid,
         authToken,
         fromNumber,
         formatPhoneForWhatsApp(barber_phone),
-        barberMsg
+        "HXbf9b535ab2519063b8b3a2f0e99f8580",
+        {
+          "1": customer_name,
+          "2": customer_phone,
+          "3": formattedDate,
+          "4": appointment_code,
+        }
       );
     }
 
