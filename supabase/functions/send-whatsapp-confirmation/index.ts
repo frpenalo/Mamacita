@@ -176,17 +176,21 @@ Deno.serve(async (req) => {
       customerMsg
     );
 
-    // Message to barber (if phone provided)
+    // Message to barber using template (if phone provided)
     let barberResult = { success: false, error: "No barber phone provided" };
     if (barber_phone) {
-      const barberMsg = `Nueva cita agendada 📅\n\n👤 Cliente: ${customer_name}\n📞 Teléfono: ${customer_phone}\n🕐 Hora: ${formattedDate}\n🔑 Código: ${appointment_code}`;
-
-      barberResult = await sendWhatsApp(
+      barberResult = await sendWhatsAppTemplate(
         accountSid,
         authToken,
         fromNumber,
         formatPhoneForWhatsApp(barber_phone),
-        barberMsg
+        "HXbf9b535ab2519063b8b3a2f0e99f8580",
+        {
+          "1": customer_name,
+          "2": customer_phone,
+          "3": formattedDate,
+          "4": appointment_code,
+        }
       );
     }
 
