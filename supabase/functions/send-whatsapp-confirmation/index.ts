@@ -128,15 +128,21 @@ Deno.serve(async (req) => {
 
     const formattedDate = formatDateEST(start_time);
 
-    // Message to customer
-    const customerMsg = `Hola ${customer_name} 👋\n\nTu cita en ${shop_name || "la barbería"} está confirmada ✅\n\n📅 ${formattedDate}\n💈 Con ${barber_name || "tu barbero"}\n📍 Código de cita: ${appointment_code}\n\nPara cancelar o reprogramar responde a este mensaje.`;
-
-    const customerResult = await sendWhatsApp(
+    // Message to customer using template
+    const customerResult = await sendWhatsAppTemplate(
       accountSid,
       authToken,
       fromNumber,
       formatPhoneForWhatsApp(customer_phone),
-      customerMsg
+      "HXa99c17b5400ab08275dd4b4f967c9b3b",
+      {
+        "1": customer_name,
+        "2": shop_name || "",
+        "3": formattedDate,
+        "4": barber_name || "",
+        "5": address || "",
+        "6": appointment_code,
+      }
     );
 
     // Message to barber using template (if phone provided)
