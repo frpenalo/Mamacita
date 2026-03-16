@@ -137,9 +137,9 @@ Deno.serve(async (req) => {
       "HXa99c17b5400ab08275dd4b4f967c9b3b",
       {
         "1": customer_name,
-        "2": shop_name || "",
+        "2": shop_name || "la barbería",
         "3": formattedDate,
-        "4": barber_name || "",
+        "4": barber_name || "tu barbero",
         "5": address || "",
         "6": appointment_code,
       }
