@@ -29,44 +29,6 @@ function formatDateEST(isoString: string): string {
   return formatter.format(date) + " EST";
 }
 
-async function sendWhatsApp(
-  accountSid: string,
-  authToken: string,
-  from: string,
-  to: string,
-  body: string
-): Promise<{ success: boolean; sid?: string; error?: string }> {
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
-  const auth = btoa(`${accountSid}:${authToken}`);
-
-  const params = new URLSearchParams();
-  params.append("From", from);
-  params.append("To", to);
-  params.append("Body", body);
-
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${auth}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: params.toString(),
-    });
-
-    const data = await res.json();
-    if (res.ok) {
-      console.log(`[whatsapp] Sent to ${to}, SID: ${data.sid}`);
-      return { success: true, sid: data.sid };
-    } else {
-      console.error(`[whatsapp] Failed to send to ${to}:`, data);
-      return { success: false, error: data.message || "Unknown error" };
-    }
-  } catch (err) {
-    console.error(`[whatsapp] Error sending to ${to}:`, err);
-    return { success: false, error: String(err) };
-  }
-}
 
 async function sendWhatsAppTemplate(
   accountSid: string,
@@ -148,6 +110,7 @@ Deno.serve(async (req) => {
       shop_name,
       barber_name,
       barber_phone,
+      address,
       start_time,
       appointment_code,
     } = await req.json();
@@ -165,15 +128,21 @@ Deno.serve(async (req) => {
 
     const formattedDate = formatDateEST(start_time);
 
-    // Message to customer
-    const customerMsg = `Hola ${customer_name} 👋\n\nTu cita en ${shop_name || "la barbería"} está confirmada ✅\n\n📅 ${formattedDate}\n💈 Con ${barber_name || "tu barbero"}\n📍 Código de cita: ${appointment_code}\n\nPara cancelar o reprogramar responde a este mensaje.`;
-
-    const customerResult = await sendWhatsApp(
+    // Message to customer using template
+    const customerResult = await sendWhatsAppTemplate(
       accountSid,
       authToken,
       fromNumber,
       formatPhoneForWhatsApp(customer_phone),
-      customerMsg
+      "HXa99c17b5400ab08275dd4b4f967c9b3b",
+      {
+        "1": customer_name,
+        "2": shop_name || "",
+        "3": formattedDate,
+        "4": barber_name || "",
+        "5": address || "",
+        "6": appointment_code,
+      }
     );
 
     // Message to barber using template (if phone provided)

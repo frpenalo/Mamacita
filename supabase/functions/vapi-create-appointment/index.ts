@@ -306,7 +306,7 @@ Deno.serve(async (req) => {
     try {
       const { data: barberInfo } = await supabase
         .from("barbers")
-        .select("name, shop_name, phone_number, whatsapp_number")
+        .select("name, shop_name, phone_number, whatsapp_number, address")
         .eq("id", barber_id)
         .maybeSingle();
 
@@ -327,6 +327,7 @@ Deno.serve(async (req) => {
             shop_name: barberInfo?.shop_name || "",
             barber_name: barberInfo?.name || "",
             barber_phone: barberInfo?.whatsapp_number || barberInfo?.phone_number || "",
+            address: barberInfo?.address || "",
             start_time: startIso,
             appointment_code: appointmentCode,
           }),
