@@ -110,6 +110,7 @@ Deno.serve(async (req) => {
       shop_name,
       barber_name,
       barber_phone,
+      address,
       start_time,
       appointment_code,
     } = await req.json();
