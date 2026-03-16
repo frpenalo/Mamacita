@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
 
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID")!;
     const authToken = Deno.env.get("TWILIO_AUTH_TOKEN")!;
-    const fromNumber = "whatsapp:+14155238886";
+    const fromNumber = "whatsapp:+19844009792";
 
     const formattedDate = formatDateEST(start_time);
 
