@@ -128,22 +128,25 @@ Deno.serve(async (req) => {
 
     const formattedDate = formatDateEST(start_time);
 
+    // TODO: activar cuando appointment_confirmation sea aprobado por Meta
+    // HXa99c17b5400ab08275dd4b4f967c9b3b
     // Message to customer using template
-    const customerResult = await sendWhatsAppTemplate(
-      accountSid,
-      authToken,
-      fromNumber,
-      formatPhoneForWhatsApp(customer_phone),
-      "HXa99c17b5400ab08275dd4b4f967c9b3b",
-      {
-        "1": customer_name,
-        "2": shop_name || "la barbería",
-        "3": formattedDate,
-        "4": barber_name || "tu barbero",
-        "5": address || "",
-        "6": appointment_code,
-      }
-    );
+    // const customerResult = await sendWhatsAppTemplate(
+    //   accountSid,
+    //   authToken,
+    //   fromNumber,
+    //   formatPhoneForWhatsApp(customer_phone),
+    //   "HXa99c17b5400ab08275dd4b4f967c9b3b",
+    //   {
+    //     "1": customer_name,
+    //     "2": shop_name || "la barbería",
+    //     "3": formattedDate,
+    //     "4": barber_name || "tu barbero",
+    //     "5": address || "",
+    //     "6": appointment_code,
+    //   }
+    // );
+    const customerResult = { success: false, error: "Template pending Meta approval" };
 
     // Message to barber using template (if phone provided)
     let barberResult = { success: false, error: "No barber phone provided" };
