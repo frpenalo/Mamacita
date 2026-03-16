@@ -29,44 +29,6 @@ function formatDateEST(isoString: string): string {
   return formatter.format(date) + " EST";
 }
 
-async function sendWhatsApp(
-  accountSid: string,
-  authToken: string,
-  from: string,
-  to: string,
-  body: string
-): Promise<{ success: boolean; sid?: string; error?: string }> {
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
-  const auth = btoa(`${accountSid}:${authToken}`);
-
-  const params = new URLSearchParams();
-  params.append("From", from);
-  params.append("To", to);
-  params.append("Body", body);
-
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${auth}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: params.toString(),
-    });
-
-    const data = await res.json();
-    if (res.ok) {
-      console.log(`[whatsapp] Sent to ${to}, SID: ${data.sid}`);
-      return { success: true, sid: data.sid };
-    } else {
-      console.error(`[whatsapp] Failed to send to ${to}:`, data);
-      return { success: false, error: data.message || "Unknown error" };
-    }
-  } catch (err) {
-    console.error(`[whatsapp] Error sending to ${to}:`, err);
-    return { success: false, error: String(err) };
-  }
-}
 
 async function sendWhatsAppTemplate(
   accountSid: string,
