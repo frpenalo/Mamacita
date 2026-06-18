@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Secrets / entorno local
+.env
+.env.*
+!.env.example
+
+# Supabase CLI temp
+supabase/.temp/

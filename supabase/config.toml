@@ -23,3 +23,15 @@ verify_jwt = false
 
 [functions.accrue-referral-balance]
 verify_jwt = false
+
+[functions.vapi-join-queue]
+verify_jwt = false
+
+[functions.vapi-take-message]
+verify_jwt = false
+
+[functions.send-whatsapp-queue-notification]
+verify_jwt = false
+
+[functions.nxtup-events]
+verify_jwt = false

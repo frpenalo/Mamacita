@@ -1,3 +1,9 @@
+// vapi-assistant-request — walk-in queue version
+// Called by VAPI when a call comes in. Looks up the shop by the dialed number,
+// fetches current availability (NXTUP API if linked, local tables otherwise),
+// and hands the assistant everything it needs to answer the caller.
+// Spec: planning/product/walk-in-queue-spec.md
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -6,230 +12,115 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-vapi-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-let SLOT_DURATION = 45; // minutes — overridden per barber
+interface Availability {
+  professionals_available: number;
+  professionals_busy: number;
+  queue_waiting: number;
+  queue_arrived: number;
+  estimated_wait_minutes: number | null;
+}
 
-/**
- * Get current date/time in a specific IANA timezone using Intl.DateTimeFormat.
- * Returns { year, month, day, hours, minutes, seconds } in that timezone.
- */
-function getDatePartsInTZ(date: Date, tz: string) {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(date);
-  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value || "0", 10);
+async function getNxtupAvailability(shop: any): Promise<Availability | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(
+      `${shop.nxtup_api_url}/api/mamacita/availability?shop_id=${encodeURIComponent(shop.nxtup_shop_id)}`,
+      {
+        headers: { Authorization: `Bearer ${shop.nxtup_shared_secret}` },
+        signal: controller.signal,
+      }
+    );
+    clearTimeout(timeout);
+    if (!res.ok) {
+      console.error(`[assistant-request] NXTUP availability returned ${res.status}`);
+      return null;
+    }
+    const data = await res.json();
+    return {
+      professionals_available: data.professionals_available ?? 0,
+      professionals_busy: data.professionals_busy ?? 0,
+      queue_waiting: data.queue_waiting ?? 0,
+      queue_arrived: 0,
+      estimated_wait_minutes: data.estimated_wait_minutes ?? null,
+    };
+  } catch (err) {
+    console.error("[assistant-request] NXTUP availability failed:", err);
+    return null;
+  }
+}
+
+async function getLocalAvailability(supabase: any, shopId: string): Promise<Availability | null> {
+  const { data, error } = await supabase.rpc("shop_availability", { p_shop_id: shopId });
+  if (error || !data || data.length === 0) {
+    console.error("[assistant-request] local availability failed:", error);
+    return null;
+  }
+  const row = data[0];
   return {
-    year: get("year"),
-    month: get("month"), // 1-indexed
-    day: get("day"),
-    hours: get("hour") === 24 ? 0 : get("hour"),
-    minutes: get("minute"),
-    seconds: get("second"),
+    professionals_available: row.professionals_available ?? 0,
+    professionals_busy: row.professionals_busy ?? 0,
+    queue_waiting: row.queue_waiting ?? 0,
+    queue_arrived: row.queue_arrived ?? 0,
+    estimated_wait_minutes: row.estimated_wait_minutes,
   };
 }
 
-/**
- * Create a UTC Date that represents a specific wall-clock time in a timezone.
- * E.g., "9:00 AM EST" → the UTC instant when it's 9:00 in EST.
- */
-function wallClockToUTC(year: number, month: number, day: number, hours: number, minutes: number, tz: string): Date {
-  // Create a date string and use the timezone to find the UTC offset
-  const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`;
-  // Use a trick: format a known UTC date in the target TZ to find the offset
-  const testDate = new Date(dateStr + "Z"); // treat as UTC first
-  const inTZ = getDatePartsInTZ(testDate, tz);
-  // The difference between what we wanted and what we got tells us the offset
-  const wantedMinutes = hours * 60 + minutes;
-  const gotMinutes = inTZ.hours * 60 + inTZ.minutes;
-  let offsetMinutes = gotMinutes - wantedMinutes;
-  // Handle day boundary
-  if (offsetMinutes > 720) offsetMinutes -= 1440;
-  if (offsetMinutes < -720) offsetMinutes += 1440;
-  return new Date(testDate.getTime() - offsetMinutes * 60000);
-}
+// This string is spoken to the caller almost verbatim by the assistant, so it must be
+// clean second-person Spanish with NO internal instructions and NO bare digits (the TTS
+// reads "1" as "uno" → bad concordance). Behavior rules (when to add to the list, etc.)
+// live in the assistant prompt, not here.
+function buildAvailabilityMessage(av: Availability | null): string {
+  if (!av) {
+    return "En este momento no puedo confirmar la disponibilidad.";
+  }
+  const inQueue = av.queue_waiting + av.queue_arrived;
 
-function formatTimeAMPM(date: Date, tz: string): string {
-  const parts = getDatePartsInTZ(date, tz);
-  let hours = parts.hours;
-  const minutes = parts.minutes;
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12 || 12;
-  const minStr = minutes < 10 ? `0${minutes}` : `${minutes}`;
-  return `${hours}:${minStr} ${ampm}`;
-}
-
-function formatWorkHour(time: string): string {
-  const [h, m] = time.split(":");
-  let hours = parseInt(h, 10);
-  const minutes = m || "00";
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12 || 12;
-  return `${hours}:${minutes} ${ampm}`;
-}
-
-const DAY_LABELS: Record<string, string> = {
-  lun: "Lunes",
-  mar: "Martes",
-  mie: "Miércoles",
-  jue: "Jueves",
-  vie: "Viernes",
-  sab: "Sábado",
-  dom: "Domingo",
-};
-
-const MONTH_LABELS: string[] = [
-  "", "enero", "febrero", "marzo", "abril", "mayo", "junio",
-  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-];
-
-// Maps JS getDay() (0=Sun) to working_days keys
-const JS_DAY_TO_KEY: Record<number, string> = {
-  0: "dom",
-  1: "lun",
-  2: "mar",
-  3: "mie",
-  4: "jue",
-  5: "vie",
-  6: "sab",
-};
-
-function getDayOfWeekInTZ(year: number, month: number, day: number, tz: string): number {
-  const d = wallClockToUTC(year, month, day, 12, 0, tz);
-  const formatter = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" });
-  const wd = formatter.format(d);
-  const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  return map[wd] ?? 0;
-}
-
-function formatWorkingDays(days: string[] | null): string {
-  if (!days || days.length === 0) return "No configurado";
-  return days.map((d) => DAY_LABELS[d] || d).join(", ");
-}
-
-function getTimezoneOffsetString(date: Date, tz: string): string {
-  const localParts = getDatePartsInTZ(date, tz);
-  const utcHours = date.getUTCHours();
-  const utcMinutes = date.getUTCMinutes();
-  let offsetMinutes = (localParts.hours * 60 + localParts.minutes) - (utcHours * 60 + utcMinutes);
-  if (offsetMinutes > 720) offsetMinutes -= 1440;
-  if (offsetMinutes < -720) offsetMinutes += 1440;
-  const sign = offsetMinutes >= 0 ? "+" : "-";
-  const absOffset = Math.abs(offsetMinutes);
-  const offH = String(Math.floor(absOffset / 60)).padStart(2, "0");
-  const offM = String(absOffset % 60).padStart(2, "0");
-  return `${sign}${offH}:${offM}`;
-}
-
-function formatISOWithOffset(date: Date, tz: string): string {
-  const parts = getDatePartsInTZ(date, tz);
-  const offset = getTimezoneOffsetString(date, tz);
-  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}T${String(parts.hours).padStart(2, "0")}:${String(parts.minutes).padStart(2, "0")}:00${offset}`;
-}
-
-function formatSlotWithISO(date: Date, tz: string): string {
-  return `${formatTimeAMPM(date, tz)} [${formatISOWithOffset(date, tz)}]`;
-}
-
-function getSlotsForDate(
-  year: number,
-  month: number,
-  day: number,
-  workStart: string,
-  workEnd: string,
-  appointments: any[],
-  blockedTimes: any[],
-  heldSlots: any[],
-  nowUTC: Date,
-  tz: string
-): string[] {
-  const parseTime = (t: string) => {
-    const parts = t.split(":");
-    return { hours: parseInt(parts[0], 10), minutes: parseInt(parts[1], 10) };
-  };
-
-  const start = parseTime(workStart);
-  const end = parseTime(workEnd);
-
-  // Convert wall-clock work hours to UTC instants
-  const dayStartUTC = wallClockToUTC(year, month, day, start.hours, start.minutes, tz);
-  const dayEndUTC = wallClockToUTC(year, month, day, end.hours, end.minutes, tz);
-
-  const slots: { startUTC: Date; endUTC: Date }[] = [];
-  let cursor = dayStartUTC.getTime();
-  const slotMs = SLOT_DURATION * 60000;
-  while (cursor + slotMs <= dayEndUTC.getTime()) {
-    slots.push({
-      startUTC: new Date(cursor),
-      endUTC: new Date(cursor + slotMs),
-    });
-    cursor += slotMs;
+  // Nadie en turno: no hay barberos trabajando.
+  if (av.professionals_available === 0 && av.professionals_busy === 0) {
+    return "En este momento no hay barberos en turno.";
   }
 
-  const available: string[] = [];
-  const nowMs = nowUTC.getTime();
-
-  for (const slot of slots) {
-    const sStart = slot.startUTC.getTime();
-    const sEnd = slot.endUTC.getTime();
-
-    if (sStart < nowMs) continue;
-
-    const hasAppt = appointments.some((a: any) => {
-      const aStart = new Date(a.start_time).getTime();
-      const aEnd = new Date(a.end_time).getTime();
-      return aStart < sEnd && aEnd > sStart;
-    });
-    if (hasAppt) continue;
-
-    const isBlocked = blockedTimes.some((b: any) => {
-      const bStart = new Date(b.start_time).getTime();
-      const bEnd = new Date(b.end_time).getTime();
-      return bStart < sEnd && bEnd > sStart;
-    });
-    if (isBlocked) continue;
-
-    const isHeld = heldSlots.some((h: any) => {
-      if (h.hold_expires_at && new Date(h.hold_expires_at).getTime() < nowMs) return false;
-      const hStart = new Date(h.start_time).getTime();
-      const hEnd = new Date(h.end_time).getTime();
-      return hStart < sEnd && hEnd > sStart;
-    });
-    if (isHeld) continue;
-
-    available.push(formatSlotWithISO(slot.startUTC, tz));
+  // Hay barberos LIBRES ahora mismo.
+  if (av.professionals_available > 0) {
+    const n = av.professionals_available;
+    const libres = n === 1 ? "un barbero libre" : `${n} barberos libres`;
+    return inQueue === 0
+      ? `Hay ${libres} ahora mismo, sin fila. Puedes venir directo.`
+      : `Hay ${libres} ahora mismo. Puedes venir directo.`;
   }
 
-  return available;
+  // Todos OCUPADOS (hay barberos trabajando, ninguno libre). Siempre invitamos a
+  // venir y esperar — es el corazón del walk-in. Nunca prometemos minutos.
+  if (inQueue === 0) {
+    return "Los barberos están ocupados ahora mismo, pero no hay nadie esperando. Puedes venir y te atienden enseguida.";
+  }
+  return inQueue === 1
+    ? "Los barberos están ocupados ahora mismo y hay una persona esperando. Puedes venir y esperar tu turno."
+    : `Los barberos están ocupados ahora mismo y hay ${inQueue} personas esperando. Puedes venir y esperar tu turno.`;
 }
 
 Deno.serve(async (req) => {
   console.log("[vapi-assistant-request] Request received:", req.method);
-  
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  let vapiSecret = req.headers.get("x-vapi-secret");
+  // Accept the secret from either header: VAPI's "Bearer Token" credential
+  // sends Authorization: Bearer <token>; a custom-header credential sends
+  // x-vapi-secret. Read whichever is present, then strip the Bearer prefix.
+  let vapiSecret = req.headers.get("x-vapi-secret") || req.headers.get("authorization");
   const expected = Deno.env.get("VAPI_WEBHOOK_SECRET");
-  
-  // Strip "Bearer " prefix if present (Vapi sometimes sends it this way)
   if (vapiSecret?.startsWith("Bearer ")) {
     vapiSecret = vapiSecret.substring(7);
   }
-  
   // Fail-closed: reject if secret not configured OR doesn't match
   if (!expected || !vapiSecret || vapiSecret.trim() !== expected.trim()) {
     console.log("[vapi-assistant-request] Auth failed - returning 401");
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { 
-      status: 401, 
-      headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
@@ -263,135 +154,81 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { data: barber, error: barberError } = await supabase
-      .from("barbers")
+    const { data: shop, error: shopError } = await supabase
+      .from("shops")
       .select("*")
       .eq("phone_number", calledNumber)
       .maybeSingle();
 
-    if (barberError || !barber) {
-      return new Response(JSON.stringify({ error: "Barber not found for number: " + calledNumber }), {
+    if (shopError || !shop) {
+      return new Response(JSON.stringify({ error: "Shop not found for number: " + calledNumber }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const workStart = barber.working_hours_start || "09:00";
-    const workEnd = barber.working_hours_end || "18:00";
-    const tz = barber.timezone || "America/New_York";
-    SLOT_DURATION = barber.appointment_duration || 45;
-
-    const nowUTC = new Date();
-    const nowParts = getDatePartsInTZ(nowUTC, tz);
-
-    const todayYear = nowParts.year;
-    const todayMonth = nowParts.month;
-    const todayDay = nowParts.day;
-
-    // Build list of next 7 days (date parts in barber's TZ)
-    const daysToCheck: { year: number; month: number; day: number; label: string }[] = [];
-    for (let i = 0; i < 7; i++) {
-      const dateUTC = new Date(wallClockToUTC(todayYear, todayMonth, todayDay, 12, 0, tz).getTime() + i * 24 * 60 * 60 * 1000);
-      const parts = getDatePartsInTZ(dateUTC, tz);
-      const dow = getDayOfWeekInTZ(parts.year, parts.month, parts.day, tz);
-      const dayKey = JS_DAY_TO_KEY[dow];
-
-      // Skip days not in working_days
-      if (barber.working_days && barber.working_days.length > 0 && !barber.working_days.includes(dayKey)) {
-        continue;
-      }
-
-      const label = i === 0 ? "Hoy" : i === 1 ? "Mañana" : `${DAY_LABELS[dayKey] || dayKey} ${parts.day} de ${MONTH_LABELS[parts.month]}`;
-      daysToCheck.push({ year: parts.year, month: parts.month, day: parts.day, label });
+    // Availability: NXTUP if linked, local otherwise. NXTUP failure falls back to local.
+    let availability: Availability | null = null;
+    if (shop.nxtup_shop_id && shop.nxtup_api_url && shop.nxtup_shared_secret) {
+      availability = await getNxtupAvailability(shop);
+    }
+    if (!availability) {
+      availability = await getLocalAvailability(supabase, shop.id);
     }
 
-    // Query range: start of today to end of last day to check
-    const lastDay = daysToCheck.length > 0 ? daysToCheck[daysToCheck.length - 1] : { year: todayYear, month: todayMonth, day: todayDay };
-    const queryStartUTC = wallClockToUTC(todayYear, todayMonth, todayDay, 0, 0, tz).toISOString();
-    const queryEndUTC = wallClockToUTC(lastDay.year, lastDay.month, lastDay.day, 23, 59, tz).toISOString();
-
-    console.log(`[assistant-request] TZ: ${tz}, Now UTC: ${nowUTC.toISOString()}`);
-    console.log(`[assistant-request] Today (in TZ): ${todayYear}-${todayMonth}-${todayDay}`);
-    console.log(`[assistant-request] Days to check: ${JSON.stringify(daysToCheck.map(d => d.label))}`);
-    console.log(`[assistant-request] Query range: ${queryStartUTC} → ${queryEndUTC}`);
-    console.log(`[assistant-request] Work hours: ${workStart} - ${workEnd}, Working days: ${JSON.stringify(barber.working_days)}`);
-
-    // Fetch appointments
-    const { data: appointments } = await supabase
-      .from("appointments")
-      .select("start_time, end_time, status")
-      .eq("barber_id", barber.id)
-      .in("status", ["confirmed", "rescheduled"])
-      .lte("start_time", queryEndUTC)
-      .gte("end_time", queryStartUTC);
-
-    console.log(`[assistant-request] Found ${appointments?.length || 0} appointments`);
-
-    // Fetch blocked times
-    const { data: blockedTimes } = await supabase
-      .from("blocked_times")
-      .select("start_time, end_time")
-      .eq("barber_id", barber.id)
-      .lte("start_time", queryEndUTC)
-      .gte("end_time", queryStartUTC);
-
-    console.log(`[assistant-request] Found ${blockedTimes?.length || 0} blocked times`);
-
-    // Fetch held slots
-    const { data: heldSlots } = await supabase
-      .from("availability_slots")
-      .select("start_time, end_time, hold_expires_at, held_by_session_id")
-      .eq("barber_id", barber.id)
-      .eq("status", "held")
-      .gte("start_time", queryStartUTC)
-      .lte("start_time", queryEndUTC);
-
-    console.log(`[assistant-request] Found ${heldSlots?.length || 0} held slots`);
-
-    // Find slots across all 7 days
-    const dayResults: { label: string; slots: string[] }[] = [];
-
-    for (const d of daysToCheck) {
-      const slots = getSlotsForDate(d.year, d.month, d.day, workStart, workEnd, appointments || [], blockedTimes || [], heldSlots || [], nowUTC, tz);
-      console.log(`[assistant-request] Day ${d.label} (${d.year}-${d.month}-${d.day}): ${slots.length} slots available`);
-      if (slots.length > 0) {
-        dayResults.push({ label: d.label, slots });
+    // Telemetry: register the call (cost/duration/outcome filled in by other functions)
+    const vapiCallId = body?.message?.call?.id;
+    const callerPhone =
+      body?.message?.call?.from || body?.message?.customer?.number || null;
+    if (vapiCallId) {
+      const { error: callErr } = await supabase.from("calls").insert({
+        shop_id: shop.id,
+        vapi_call_id: vapiCallId,
+        caller_phone: callerPhone,
+      });
+      if (callErr && callErr.code !== "23505") {
+        // 23505 = duplicate (retry of same call) — fine to ignore
+        console.error("[assistant-request] calls insert failed:", callErr);
       }
     }
-
-    let availableStr = "";
-    if (dayResults.length > 0) {
-      availableStr = dayResults.map(r => `${r.label}: ${r.slots.join(", ")}`).join(". ");
-    } else {
-      availableStr = "No hay horarios disponibles en los próximos 7 días";
-    }
-
-    console.log(`[assistant-request] Available slots: ${availableStr}`);
-
-    const vapiAssistantId = barber.vapi_assistant_id;
 
     const variableValues = {
-      shop_name: barber.shop_name,
-      barber_name: barber.name,
-      barber_id: barber.id,
-      address: barber.address || "",
-      working_hours_start: formatWorkHour(workStart),
-      working_hours_end: formatWorkHour(workEnd),
-      working_days: formatWorkingDays(barber.working_days),
-      available_slots: availableStr,
+      shop_id: shop.id,
+      shop_name: shop.name,
+      caller_phone: callerPhone || "", // the number the caller is dialing from — Julie uses this so she never has to ask
+      address: shop.address || "",
+      services_text: shop.services_text || "",
+      professionals_available: availability?.professionals_available ?? 0,
+      queue_count: (availability?.queue_waiting ?? 0) + (availability?.queue_arrived ?? 0),
+      estimated_wait_minutes: availability?.estimated_wait_minutes ?? "",
+      availability_message: buildAvailabilityMessage(availability),
+    };
+
+    console.log(`[assistant-request] shop=${shop.name} av=${JSON.stringify(availability)}`);
+
+    // Tell VAPI (per call) to deliver the end-of-call-report to our telemetry endpoint,
+    // authenticated with the same secret. This wires up cost/duration/transcript capture
+    // (calls table) without touching the assistant config in the VAPI dashboard.
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const endOfCallServer = {
+      url: `${supabaseUrl}/functions/v1/vapi-end-of-call`,
+      secret: Deno.env.get("VAPI_WEBHOOK_SECRET"),
     };
 
     const response: any = {};
-
-    if (vapiAssistantId) {
-      response.assistantId = vapiAssistantId;
+    if (shop.vapi_assistant_id) {
+      response.assistantId = shop.vapi_assistant_id;
       response.assistantOverrides = {
         variableValues,
+        server: endOfCallServer,
+        serverMessages: ["end-of-call-report"],
       };
     } else {
       response.assistant = {
-        firstMessage: `Hola, gracias por llamar a ${barber.shop_name}. ¿Te gustaría agendar una cita?`,
+        firstMessage: `Hola, gracias por llamar a ${shop.name}. ¿En qué te puedo ayudar?`,
         variableValues,
+        server: endOfCallServer,
+        serverMessages: ["end-of-call-report"],
       };
     }
 
