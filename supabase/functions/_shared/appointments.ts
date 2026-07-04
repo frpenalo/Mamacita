@@ -115,8 +115,11 @@ export async function findOrCreateCustomer(
     .select("id").eq("barber_id", barberId).eq("phone_number", phone).maybeSingle();
   if (existing) return existing.id;
 
+  // NO seteamos shop_id: el producto de citas vive en el mundo `barbers`. Ponerlo =barberId
+  // rompía para barberos individuales sin fila en `shops` (FK customers_shop_id_fkey, 23503).
+  // shop_id es nullable y el flujo de citas nunca lo usa.
   const { data: created, error } = await supabase.from("customers")
-    .insert({ barber_id: barberId, shop_id: barberId, name: name || "Cliente", phone_number: phone })
+    .insert({ barber_id: barberId, name: name || "Cliente", phone_number: phone })
     .select("id").single();
   if (error) {
     console.error("[appointments] create customer failed:", error);
