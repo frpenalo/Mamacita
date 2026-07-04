@@ -30,50 +30,46 @@ const WhatsAppLinkCard = ({ waCode }: Props) => {
   };
 
   return (
-    <div className="bg-card rounded-lg p-4 border border-border space-y-4">
+    <div className="bg-card rounded-xl border border-border p-5 max-w-md mx-auto">
+      {/* Encabezado */}
       <div className="flex items-center gap-2">
-        <MessageCircle className="h-5 w-5 text-primary" />
+        <MessageCircle className="h-5 w-5 text-primary shrink-0" />
         <h2 className="text-base font-semibold">Tu link para clientes</h2>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Comparte esto para que tus clientes agenden citas por WhatsApp. Pégalo en tus redes o
-        imprime el QR para tu local.
+      <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+        Compártelo para que tus clientes agenden por WhatsApp. Pégalo en tus redes o imprime el QR para tu local.
       </p>
 
       {/* QR sobre fondo blanco (para que escanee bien) */}
-      <div ref={qrWrapRef} className="flex justify-center">
-        <div className="bg-white p-3 rounded-lg">
-          <QRCodeCanvas value={link} size={168} level="M" />
+      <div ref={qrWrapRef} className="mt-4 flex justify-center">
+        <div className="bg-white p-3 rounded-xl">
+          <QRCodeCanvas value={link} size={150} level="M" />
         </div>
       </div>
 
-      {/* Link con copiar rápido */}
-      <div className="flex items-center gap-2 bg-secondary rounded-lg p-2.5">
-        <span className="text-xs text-muted-foreground truncate flex-1">{link}</span>
-        <button
-          onClick={copyLink}
-          className="p-1.5 rounded-md hover:bg-muted transition-colors flex-shrink-0"
-          aria-label="Copiar link"
-        >
-          <Copy className="h-4 w-4 text-primary" />
-        </button>
+      {/* Campo de link con el botón Copiar adosado — queda claro qué copiar */}
+      <div className="mt-4">
+        <span className="mb-1.5 block text-xs font-medium text-muted-foreground">Tu link</span>
+        <div className="flex items-stretch overflow-hidden rounded-lg border border-border bg-background">
+          <span className="flex-1 min-w-0 self-center truncate px-3 py-2.5 text-xs text-muted-foreground">
+            {link}
+          </span>
+          <button
+            onClick={copyLink}
+            className="flex shrink-0 items-center gap-1.5 px-4 gold-gradient text-sm font-semibold text-primary-foreground"
+          >
+            <Copy className="h-4 w-4" /> Copiar
+          </button>
+        </div>
       </div>
 
-      {/* Acciones */}
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={copyLink}
-          className="flex items-center justify-center gap-2 p-2.5 rounded-lg bg-secondary text-sm hover:bg-secondary/80 transition-colors"
-        >
-          <Copy className="h-4 w-4" /> Copiar link
-        </button>
-        <button
-          onClick={downloadQR}
-          className="flex items-center justify-center gap-2 p-2.5 rounded-lg bg-secondary text-sm hover:bg-secondary/80 transition-colors"
-        >
-          <Download className="h-4 w-4" /> Descargar QR
-        </button>
-      </div>
+      {/* Acción secundaria */}
+      <button
+        onClick={downloadQR}
+        className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2.5 text-sm text-foreground transition-colors hover:bg-secondary"
+      >
+        <Download className="h-4 w-4" /> Descargar QR
+      </button>
     </div>
   );
 };

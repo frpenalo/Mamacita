@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBarber } from '@/hooks/useBarber';
 import BottomNav from '@/components/BottomNav';
+import WhatsAppLinkCard from '@/components/WhatsAppLinkCard';
 import ClientDetailDialog from '@/components/ClientDetailDialog';
 import NewAppointmentDialog from '@/components/NewAppointmentDialog';
 import { Input } from '@/components/ui/input';
@@ -63,6 +64,13 @@ const Clients = () => {
           />
         </div>
       </div>
+
+      {/* Link/QR para que los clientes agenden por WhatsApp (producto de citas) */}
+      {(barber as any)?.wa_code && (
+        <div className="px-4 mb-6">
+          <WhatsAppLinkCard waCode={(barber as any).wa_code} />
+        </div>
+      )}
 
       <div className="px-4 space-y-2">
         {filtered.length === 0 ? (
