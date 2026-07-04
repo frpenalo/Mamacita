@@ -12,7 +12,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { formatInTimeZone } from "https://esm.sh/date-fns-tz@3.2.0";
-import { formatPhoneForWhatsApp, sendWhatsApp } from "../_shared/whatsapp.ts";
+import { formatPhoneForWhatsApp, sendWhatsApp, sendTemplate } from "../_shared/whatsapp.ts";
 import { formatApptEs } from "../_shared/barber.ts";
 
 const corsHeaders = {
@@ -44,7 +44,11 @@ Deno.serve(async (req) => {
 
   const authHeader = req.headers.get("Authorization");
   const secret = Deno.env.get("FUNCTION_SECRET");
-  if (!secret || authHeader !== `Bearer ${secret}`) {
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  const authorized =
+    (secret && authHeader === `Bearer ${secret}`) ||
+    (cronSecret && authHeader === `Bearer ${cronSecret}`);
+  if (!authorized) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -76,6 +80,11 @@ Deno.serve(async (req) => {
         await supabase.from("reminders").update({ status: "skipped" }).eq("id", r.id);
         continue;
       }
+      // No recordar citas que ya pasaron (si la cola se atrasó, no mandamos avisos viejos).
+      if (new Date(appt.start_time).getTime() <= Date.now()) {
+        await supabase.from("reminders").update({ status: "skipped" }).eq("id", r.id);
+        continue;
+      }
 
       const { data: barber } = await supabase.from("barbers").select("name, timezone").eq("id", r.barber_id).maybeSingle();
       const tz = barber?.timezone || "America/New_York";
@@ -88,11 +97,27 @@ Deno.serve(async (req) => {
         .maybeSingle();
       const lang = sess?.language || "es";
 
+      const name = cust.name || "";
+      const barberName = barber?.name || "tu barbero";
+      const to = formatPhoneForWhatsApp(cust.phone_number);
       const time = formatInTimeZone(appt.start_time, tz, "h:mm a");
       const when = formatApptEs(appt.start_time, tz);
-      const msg = reminderText(r.kind, lang, cust.name || "", barber?.name || "tu barbero", when, time);
 
-      const okSid = await sendWhatsApp(formatPhoneForWhatsApp(cust.phone_number), msg);
+      // 1) Plantilla aprobada por Meta (business-initiated → llega fuera de la ventana de 24h).
+      const tplSid = r.kind === "24h"
+        ? (lang === "en" ? Deno.env.get("TWILIO_TPL_REMINDER_24H_EN") : Deno.env.get("TWILIO_TPL_REMINDER_24H"))
+        : (lang === "en" ? Deno.env.get("TWILIO_TPL_REMINDER_2H_EN") : Deno.env.get("TWILIO_TPL_REMINDER_2H"));
+      const tplVars = r.kind === "24h"
+        ? { "1": name, "2": barberName, "3": when }
+        : { "1": name, "2": barberName, "3": time };
+
+      // 2) Fallback freeform (solo llega si la ventana de 24h sigue abierta; útil mientras la plantilla se aprueba).
+      let okSid: string | null = null;
+      if (tplSid) okSid = await sendTemplate(to, tplSid, tplVars);
+      if (!okSid) {
+        const msg = reminderText(r.kind, lang, name, barberName, when, time);
+        okSid = await sendWhatsApp(to, msg);
+      }
       await supabase.from("reminders").update({ status: okSid ? "sent" : "skipped", sent_at: nowIso }).eq("id", r.id);
       if (okSid) sent++;
     }
