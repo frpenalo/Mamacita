@@ -23,16 +23,23 @@ const Register = () => {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     setLoading(false);
     if (error) {
       toast.error(error.message);
+      return;
+    }
+    // Guardar el código de referido para usarlo en el onboarding
+    if (refCode) {
+      localStorage.setItem('mamacita_ref', refCode);
+    }
+    if (data.session) {
+      // Autoconfirm activo → la cuenta ya viene con sesión: directo a configurar el perfil
+      toast.success('¡Cuenta creada! Vamos a configurar tu perfil.');
+      navigate('/onboarding');
     } else {
-      // Store referral code for use during onboarding
-      if (refCode) {
-        localStorage.setItem('mamacita_ref', refCode);
-      }
-      toast.success('Cuenta creada. Revisa tu correo para confirmar.');
+      // Confirmación de correo activada → primero hay que verificar el email
+      toast.success('Cuenta creada. Revisa tu correo para confirmar y luego inicia sesión.');
       navigate('/login');
     }
   };
