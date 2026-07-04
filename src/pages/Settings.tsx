@@ -156,7 +156,7 @@ const Settings = () => {
             <Input
               value={whatsappNumber}
               onChange={(e) => setWhatsappNumber(e.target.value)}
-              placeholder="+1 984 555 1234"
+              placeholder="984 555 1234"
             />
             <p className="text-xs text-muted-foreground">
               Aquí recibes el aviso de cada cita nueva, con botones para confirmar o cancelar.
