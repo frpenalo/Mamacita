@@ -35,3 +35,9 @@ verify_jwt = false
 
 [functions.nxtup-events]
 verify_jwt = false
+
+[functions.whatsapp-inbound]
+verify_jwt = false
+
+[functions.send-reminders]
+verify_jwt = false

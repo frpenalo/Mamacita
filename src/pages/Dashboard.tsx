@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBarber } from '@/hooks/useBarber';
 import BottomNav from '@/components/BottomNav';
+import WhatsAppLinkCard from '@/components/WhatsAppLinkCard';
 import { Plus, Clock, User, Copy, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import logoIcon from '@/assets/logo.ico';
@@ -126,7 +127,10 @@ const Dashboard = () => {
       </div>
 
       <div className="px-4 space-y-6">
-        {/* MamaCita Phone Number */}
+        {/* Link de citas por WhatsApp (producto de citas) */}
+        {(barber as any)?.wa_code && <WhatsAppLinkCard waCode={(barber as any).wa_code} />}
+
+        {/* MamaCita Phone Number (voz) */}
         {barber?.phone_number && (barber as any).vapi_phone_number_id && (
           <div className="bg-card rounded-lg p-3 border border-border flex items-center justify-between">
             <div className="flex items-center gap-2">

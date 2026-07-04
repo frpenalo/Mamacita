@@ -37,6 +37,7 @@ const Settings = () => {
   const [shopName, setShopName] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [workingDays, setWorkingDays] = useState<string[]>([]);
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('18:00');
@@ -74,6 +75,7 @@ const Settings = () => {
       setShopName(barber.shop_name);
       setAddress(barber.address || '');
       setPhone(barber.phone_number || '');
+      setWhatsappNumber((barber as any).whatsapp_number || '');
       setWorkingDays(barber.working_days || []);
       setStartTime(barber.working_hours_start || '09:00');
       setEndTime(barber.working_hours_end || '18:00');
@@ -90,6 +92,7 @@ const Settings = () => {
     setSaving(true);
     const { error } = await supabase.from('barbers').update({
       name, shop_name: shopName, address, phone_number: phone,
+      whatsapp_number: whatsappNumber,
       working_days: workingDays, working_hours_start: startTime, working_hours_end: endTime,
       appointment_duration: parseInt(appointmentDuration, 10),
     }).eq('id', barber.id);
@@ -147,6 +150,17 @@ const Settings = () => {
           <div className="space-y-2">
             <Label>Teléfono</Label>
             <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>WhatsApp para avisos de citas</Label>
+            <Input
+              value={whatsappNumber}
+              onChange={(e) => setWhatsappNumber(e.target.value)}
+              placeholder="+1 984 555 1234"
+            />
+            <p className="text-xs text-muted-foreground">
+              Aquí recibes el aviso de cada cita nueva, con botones para confirmar o cancelar.
+            </p>
           </div>
 
           <Separator />

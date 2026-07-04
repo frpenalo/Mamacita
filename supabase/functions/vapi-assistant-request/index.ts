@@ -198,6 +198,7 @@ Deno.serve(async (req) => {
       caller_phone: callerPhone || "", // the number the caller is dialing from — Julie uses this so she never has to ask
       address: shop.address || "",
       services_text: shop.services_text || "",
+      hours: shop.hours_text || "",
       professionals_available: availability?.professionals_available ?? 0,
       queue_count: (availability?.queue_waiting ?? 0) + (availability?.queue_arrived ?? 0),
       estimated_wait_minutes: availability?.estimated_wait_minutes ?? "",
