@@ -97,8 +97,17 @@ const Settings = () => {
       appointment_duration: parseInt(appointmentDuration, 10),
     }).eq('id', barber.id);
     setSaving(false);
-    if (error) toast.error('Error al guardar');
-    else { toast.success('Configuración guardada'); queryClient.invalidateQueries({ queryKey: ['barber'] }); }
+    if (error) {
+      const dupWhatsapp = error.code === '23505' &&
+        (String(error.message).includes('barbers_whatsapp_number_unique') ||
+         String(error.details).includes('barbers_whatsapp_number_unique'));
+      toast.error(dupWhatsapp
+        ? 'Ese número de WhatsApp ya está en uso por otro barbero. Usa un número distinto.'
+        : 'Error al guardar');
+      return;
+    }
+    toast.success('Configuración guardada');
+    queryClient.invalidateQueries({ queryKey: ['barber'] });
   };
 
   const handleBlock = async () => {

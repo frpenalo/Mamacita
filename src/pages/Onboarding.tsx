@@ -84,6 +84,13 @@ const Onboarding = () => {
         navigate('/login');
         return;
       }
+      const dupWhatsapp = error.code === '23505' &&
+        (String(error.message).includes('barbers_whatsapp_number_unique') ||
+         String(error.details).includes('barbers_whatsapp_number_unique'));
+      if (dupWhatsapp) {
+        toast.error('Ese número de WhatsApp ya está registrado por otro barbero. Usa un número distinto.');
+        return;
+      }
       toast.error('Error al guardar: ' + error.message);
       return;
     }
