@@ -135,7 +135,14 @@ export async function handleBarberCommand(supabase: Supa, barber: Barber, text: 
     return;
   }
 
-  // CONFIRMAR = acuse (en opción A la cita ya nace confirmada).
+  // CONFIRMAR = acuse al barbero + avisar al cliente con la DIRECCIÓN (opción A: ya nace confirmada).
+  const address = (barber.address || "").trim();
+  if (cust?.phone_number && address) {
+    await sendWhatsApp(
+      formatPhoneForWhatsApp(cust.phone_number),
+      `✅ ¡${barber.name} confirmó tu cita del ${when}!\n📍 Dirección: ${address}\n¡Te esperamos! 💈`,
+    );
+  }
   if (to) {
     await sendWhatsApp(formatPhoneForWhatsApp(to), `✅ Confirmada: ${cust?.name || "cliente"} — ${when}. ¡Listo!`);
   }

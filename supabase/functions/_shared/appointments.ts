@@ -25,6 +25,7 @@ export interface Barber {
   appointment_duration: number | null;
   whatsapp_number?: string | null;
   phone_number?: string | null;
+  address?: string | null;
 }
 
 export interface Slot {
