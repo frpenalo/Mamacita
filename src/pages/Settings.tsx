@@ -42,6 +42,9 @@ const Settings = () => {
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('18:00');
   const [appointmentDuration, setAppointmentDuration] = useState('45');
+  const [services, setServices] = useState<{ name: string; price: string; duration: string }[]>([]);
+  const [surchargeAfter, setSurchargeAfter] = useState('');
+  const [surchargeAmount, setSurchargeAmount] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Blocked times
@@ -80,6 +83,13 @@ const Settings = () => {
       setStartTime(barber.working_hours_start || '09:00');
       setEndTime(barber.working_hours_end || '18:00');
       setAppointmentDuration(String((barber as any).appointment_duration || 45));
+      setServices((((barber as any).services) || []).map((s: any) => ({
+        name: s.name || '',
+        price: s.price != null ? String(s.price) : '',
+        duration: s.duration_min != null ? String(s.duration_min) : '',
+      })));
+      setSurchargeAfter(((barber as any).surcharge_after || '').slice(0, 5));
+      setSurchargeAmount((barber as any).surcharge_amount != null ? String((barber as any).surcharge_amount) : '');
     }
   }, [barber]);
 
@@ -87,14 +97,29 @@ const Settings = () => {
     setWorkingDays((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]);
   };
 
+  const addService = () => setServices((p) => [...p, { name: '', price: '', duration: appointmentDuration || '30' }]);
+  const removeService = (i: number) => setServices((p) => p.filter((_, idx) => idx !== i));
+  const updateService = (i: number, field: 'name' | 'price' | 'duration', val: string) =>
+    setServices((p) => p.map((s, idx) => (idx === i ? { ...s, [field]: val } : s)));
+
   const handleSave = async () => {
     if (!barber) return;
     setSaving(true);
+    const cleanServices = services
+      .filter((s) => s.name.trim())
+      .map((s) => ({
+        name: s.name.trim(),
+        price: parseFloat(s.price) || 0,
+        duration_min: parseInt(s.duration, 10) || parseInt(appointmentDuration, 10) || 30,
+      }));
     const { error } = await supabase.from('barbers').update({
       name, shop_name: shopName, address, phone_number: phone,
       whatsapp_number: whatsappNumber,
       working_days: workingDays, working_hours_start: startTime, working_hours_end: endTime,
       appointment_duration: parseInt(appointmentDuration, 10),
+      services: cleanServices,
+      surcharge_after: surchargeAfter || null,
+      surcharge_amount: surchargeAmount ? parseFloat(surchargeAmount) : null,
     }).eq('id', barber.id);
     setSaving(false);
     if (error) {
@@ -209,7 +234,7 @@ const Settings = () => {
               <Clock className="h-5 w-5 text-primary" /> Configuración de citas
             </h2>
             <div className="space-y-2">
-              <Label>Duración de cada cita</Label>
+              <Label>Duración por defecto de la cita</Label>
               <Select value={appointmentDuration} onValueChange={setAppointmentDuration}>
                 <SelectTrigger>
                   <SelectValue />
@@ -222,7 +247,51 @@ const Settings = () => {
                   <SelectItem value="90">90 minutos</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">Se usa cuando el cliente no elige un servicio con su propia duración.</p>
             </div>
+
+            {/* Servicios y precios */}
+            <div className="space-y-2">
+              <Label>Servicios y precios</Label>
+              <p className="text-xs text-muted-foreground">El asistente los usa para responder precios y para la duración de la cita.</p>
+              {services.length > 0 && (
+                <div className="flex gap-2 px-1 text-[11px] text-muted-foreground">
+                  <span className="flex-1">Servicio</span>
+                  <span className="w-20 text-center">Precio $</span>
+                  <span className="w-16 text-center">Min</span>
+                  <span className="w-8" />
+                </div>
+              )}
+              {services.map((s, i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <Input placeholder="Ej. Corte regular" value={s.name} onChange={(e) => updateService(i, 'name', e.target.value)} className="flex-1" />
+                  <Input placeholder="35" value={s.price} onChange={(e) => updateService(i, 'price', e.target.value)} className="w-20 text-center" inputMode="decimal" />
+                  <Input placeholder="30" value={s.duration} onChange={(e) => updateService(i, 'duration', e.target.value)} className="w-16 text-center" inputMode="numeric" />
+                  <button onClick={() => removeService(i)} className="p-1.5 rounded-md hover:bg-destructive/20 transition-colors shrink-0" aria-label="Quitar servicio">
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </button>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={addService} className="border-primary text-primary">
+                + Agregar servicio
+              </Button>
+            </div>
+
+            {/* Recargo por hora tardía */}
+            <div className="space-y-2">
+              <Label>Recargo por hora tardía (opcional)</Label>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm text-muted-foreground">Después de</span>
+                <Input type="time" value={surchargeAfter} onChange={(e) => setSurchargeAfter(e.target.value)} className="w-32" />
+                <span className="text-sm text-muted-foreground">cobrar +$</span>
+                <Input placeholder="10" value={surchargeAmount} onChange={(e) => setSurchargeAmount(e.target.value)} className="w-20 text-center" inputMode="decimal" />
+              </div>
+              <p className="text-xs text-muted-foreground">Déjalo vacío si no cobras recargo.</p>
+            </div>
+
+            <Button onClick={handleSave} className="w-full gold-gradient text-primary-foreground font-semibold" disabled={saving}>
+              {saving ? 'Guardando...' : 'Guardar cambios'}
+            </Button>
           </div>
 
           <Separator />
