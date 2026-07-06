@@ -11,7 +11,12 @@ interface Props {
 }
 
 const WhatsAppLinkCard = ({ waCode }: Props) => {
-  const link = `https://wa.me/${WA_NUMBER}?text=agendar-${waCode}`;
+  // Mensaje pre-llenado: instrucción clara + el código integrado, para que el cliente
+  // sepa que solo debe ENVIARLO y no borre el código. El webhook detecta "agendar-CODE"
+  // (contiguo); el resto es guía. "reservar" (no "agendar") en la instrucción evita
+  // que el regex del código haga match antes de tiempo.
+  const message = `Envía este mensaje para reservar tu cita ✂️ agendar-${waCode}`;
+  const link = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(message)}`;
   const qrWrapRef = useRef<HTMLDivElement>(null);
 
   const copyLink = () => {
@@ -38,6 +43,10 @@ const WhatsAppLinkCard = ({ waCode }: Props) => {
       </div>
       <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
         Compártelo para que tus clientes agenden por WhatsApp. Pégalo en tus redes o imprime el QR para tu local.
+      </p>
+      <p className="mt-2 rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground leading-relaxed">
+        Al abrirlo, tu cliente ve este mensaje listo para enviar:<br />
+        <span className="text-foreground">“Envía este mensaje para reservar tu cita ✂️ agendar-{waCode}”</span>
       </p>
 
       {/* QR sobre fondo blanco (para que escanee bien) */}

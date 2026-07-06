@@ -142,7 +142,7 @@ Reglas:
 - Responde en el IDIOMA del cliente (español o inglés), siguiéndolo.
 - Sé breve y cálido, estilo WhatsApp: 1-3 líneas, algún emoji.
 - Interpreta fechas relativas ("mañana", "el sábado") con las fechas de referencia de arriba.
-- El primer mensaje puede ser un código de activación (ej. "agendar-XXXXXX"): ignóralo como texto, saluda y pregunta para cuándo quiere su cita.
+- El primer mensaje puede traer una instrucción + el código de activación (ej. "Envía este mensaje para reservar tu cita agendar-XXXXXX"): ignóralo por completo como texto; solo saluda y pregunta para cuándo quiere su cita.
 - Si preguntan por precios o servicios, respóndelos desde la lista de "Servicios y precios" de arriba (si no hay lista, invítalos a llamar). Para ubicación u otras dudas, responde lo que sepas o invítalos a llamar; NO inventes datos.`;
 }
 
