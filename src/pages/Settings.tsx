@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { type DateRange } from 'react-day-picker';
 import WeeklyScheduleEditor, { emptySchedule, scheduleFromBarber, barberFieldsFromSchedule, type WeekSchedule } from '@/components/WeeklyScheduleEditor';
 
 const DAYS = [
@@ -46,10 +47,9 @@ const Settings = () => {
   const [surchargeAmount, setSurchargeAmount] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Blocked times
-  const [blockStartDate, setBlockStartDate] = useState<Date | undefined>();
+  // Blocked times — un solo selector de RANGO (como en vuelos)
+  const [blockRange, setBlockRange] = useState<DateRange | undefined>();
   const [blockStartTime, setBlockStartTime] = useState('09:00');
-  const [blockEndDate, setBlockEndDate] = useState<Date | undefined>();
   const [blockEndTime, setBlockEndTime] = useState('18:00');
   const [blockReason, setBlockReason] = useState('');
   const [blockingSaving, setBlockingSaving] = useState(false);
@@ -129,10 +129,12 @@ const Settings = () => {
   };
 
   const handleBlock = async () => {
-    if (!barber || !blockStartDate || !blockEndDate) return;
+    if (!barber || !blockRange?.from) return;
+    const from = blockRange.from;
+    const to = blockRange.to || blockRange.from; // un solo día si no eligió fin
     setBlockingSaving(true);
-    const startStr = `${format(blockStartDate, 'yyyy-MM-dd')}T${blockStartTime}:00-05:00`;
-    const endStr = `${format(blockEndDate, 'yyyy-MM-dd')}T${blockEndTime}:00-05:00`;
+    const startStr = `${format(from, 'yyyy-MM-dd')}T${blockStartTime}:00-05:00`;
+    const endStr = `${format(to, 'yyyy-MM-dd')}T${blockEndTime}:00-05:00`;
     const { error } = await supabase.from('blocked_times').insert({
       barber_id: barber.id,
       start_time: new Date(startStr).toISOString(),
@@ -143,7 +145,7 @@ const Settings = () => {
     if (error) toast.error('Error al bloquear');
     else {
       toast.success('Horario bloqueado');
-      setBlockStartDate(undefined); setBlockEndDate(undefined); setBlockReason('');
+      setBlockRange(undefined); setBlockReason('');
       refetchBlocked();
     }
   };
@@ -278,42 +280,48 @@ const Settings = () => {
               <Ban className="h-5 w-5 text-primary" /> Bloquear horarios
             </h2>
 
+            {/* Un solo calendario de RANGO (estilo vuelos): toca el primer día y luego el último */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Días a bloquear</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("w-full justify-start text-sm", !blockRange?.from && "text-muted-foreground")}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {blockRange?.from ? (
+                      blockRange.to && format(blockRange.to, 'yyyy-MM-dd') !== format(blockRange.from, 'yyyy-MM-dd')
+                        ? `${format(blockRange.from, "d MMM", { locale: es })} – ${format(blockRange.to, "d MMM", { locale: es })}`
+                        : format(blockRange.from, "d 'de' MMMM", { locale: es })
+                    ) : 'Elige el día (o toca inicio y fin para un rango)'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="range"
+                    selected={blockRange}
+                    onSelect={setBlockRange}
+                    numberOfMonths={1}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+              <p className="text-[11px] text-muted-foreground">Toca el primer día y luego el último para un rango, o un solo día.</p>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Fecha inicio</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className={cn("w-full justify-start text-xs", !blockStartDate && "text-muted-foreground")}>
-                      <CalendarIcon className="mr-1 h-3 w-3" />
-                      {blockStartDate ? format(blockStartDate, "dd MMM", { locale: es }) : "Fecha"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={blockStartDate} onSelect={setBlockStartDate} initialFocus className="p-3 pointer-events-auto" />
-                  </PopoverContent>
-                </Popover>
-                <Input type="time" value={blockStartTime} onChange={(e) => setBlockStartTime(e.target.value)} className="text-xs h-8" />
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Desde las</Label>
+                <Input type="time" value={blockStartTime} onChange={(e) => setBlockStartTime(e.target.value)} className="text-sm h-9" />
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Fecha fin</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className={cn("w-full justify-start text-xs", !blockEndDate && "text-muted-foreground")}>
-                      <CalendarIcon className="mr-1 h-3 w-3" />
-                      {blockEndDate ? format(blockEndDate, "dd MMM", { locale: es }) : "Fecha"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={blockEndDate} onSelect={setBlockEndDate} initialFocus className="p-3 pointer-events-auto" />
-                  </PopoverContent>
-                </Popover>
-                <Input type="time" value={blockEndTime} onChange={(e) => setBlockEndTime(e.target.value)} className="text-xs h-8" />
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Hasta las</Label>
+                <Input type="time" value={blockEndTime} onChange={(e) => setBlockEndTime(e.target.value)} className="text-sm h-9" />
               </div>
             </div>
 
             <Input placeholder="Motivo (opcional)" value={blockReason} onChange={(e) => setBlockReason(e.target.value)} />
 
-            <Button onClick={handleBlock} variant="outline" className="w-full border-primary text-primary" disabled={blockingSaving || !blockStartDate || !blockEndDate}>
+            <Button onClick={handleBlock} variant="outline" className="w-full border-primary text-primary" disabled={blockingSaving || !blockRange?.from}>
               {blockingSaving ? 'Bloqueando...' : 'Bloquear horario'}
             </Button>
 
