@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import logoIcon from '@/assets/logo.ico';
 import { toast } from 'sonner';
+import WeeklyScheduleEditor, { emptySchedule, barberFieldsFromSchedule, SCHEDULE_DAYS, type WeekSchedule } from '@/components/WeeklyScheduleEditor';
 
 const DAYS = [
   { id: 'lun', label: 'Lunes' },
@@ -35,16 +36,14 @@ const Onboarding = () => {
   const [shopName, setShopName] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
-  const [workingDays, setWorkingDays] = useState<string[]>([]);
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('18:00');
+  const [schedule, setSchedule] = useState<WeekSchedule>(() => {
+    const s = emptySchedule();
+    Object.keys(s).forEach((k) => { s[k] = { ...s[k], enabled: true }; });
+    return s;
+  });
   const [differentWhatsapp, setDifferentWhatsapp] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [appointmentDuration, setAppointmentDuration] = useState('45');
-
-  const toggleDay = (day: string) => {
-    setWorkingDays((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]);
-  };
 
   const handleSubmit = async () => {
     if (!user) return;
@@ -68,9 +67,7 @@ const Onboarding = () => {
       address,
       phone_number: phone,
       whatsapp_number: differentWhatsapp ? whatsappNumber : phone,
-      working_days: workingDays,
-      working_hours_start: startTime,
-      working_hours_end: endTime,
+      ...barberFieldsFromSchedule(schedule),
       appointment_duration: parseInt(appointmentDuration, 10),
       vapi_assistant_id: '155157c5-6884-4fb2-a734-de26675ed69e',
     }).select('id').single();
@@ -161,26 +158,10 @@ const Onboarding = () => {
         {step === 2 && (
           <div className="space-y-4">
             <h2 className="text-xl font-semibold">Horarios de trabajo</h2>
-            <div className="space-y-3">
-              <Label>Días laborables</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {DAYS.map((day) => (
-                  <label key={day.id} className="flex items-center gap-2 p-3 rounded-lg bg-secondary cursor-pointer">
-                    <Checkbox checked={workingDays.includes(day.id)} onCheckedChange={() => toggleDay(day.id)} />
-                    <span className="text-sm">{day.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Hora de inicio</Label>
-                <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Hora de cierre</Label>
-                <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-              </div>
+            <div className="space-y-2">
+              <Label>Días y horario de trabajo</Label>
+              <p className="text-xs text-muted-foreground">Marca los días que trabajas y ajusta la hora de cada uno (pueden variar por día).</p>
+              <WeeklyScheduleEditor value={schedule} onChange={setSchedule} />
             </div>
             <div className="space-y-2">
               <Label>¿Cuánto dura cada cita?</Label>
@@ -201,7 +182,7 @@ const Onboarding = () => {
               <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Atrás
               </Button>
-              <Button onClick={() => setStep(3)} className="flex-1 gold-gradient text-primary-foreground font-semibold" disabled={workingDays.length === 0}>
+              <Button onClick={() => setStep(3)} className="flex-1 gold-gradient text-primary-foreground font-semibold" disabled={!SCHEDULE_DAYS.some((d) => schedule[d.id]?.enabled)}>
                 Siguiente <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -216,8 +197,7 @@ const Onboarding = () => {
               <div><span className="text-muted-foreground text-sm">Negocio:</span> <span className="font-medium">{shopName}</span></div>
               <div><span className="text-muted-foreground text-sm">Dirección:</span> <span className="font-medium">{address || '—'}</span></div>
               <div><span className="text-muted-foreground text-sm">Teléfono:</span> <span className="font-medium">{phone || '—'}</span></div>
-              <div><span className="text-muted-foreground text-sm">Días:</span> <span className="font-medium">{workingDays.join(', ') || '—'}</span></div>
-              <div><span className="text-muted-foreground text-sm">Horario:</span> <span className="font-medium">{startTime} - {endTime}</span></div>
+              <div><span className="text-muted-foreground text-sm">Días:</span> <span className="font-medium">{SCHEDULE_DAYS.filter((d) => schedule[d.id]?.enabled).map((d) => d.label).join(', ') || '—'}</span></div>
               <div><span className="text-muted-foreground text-sm">Duración de cita:</span> <span className="font-medium">{appointmentDuration} min</span></div>
             </div>
             <div className="flex gap-3">

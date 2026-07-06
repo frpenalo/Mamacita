@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import WeeklyScheduleEditor, { emptySchedule, scheduleFromBarber, barberFieldsFromSchedule, type WeekSchedule } from '@/components/WeeklyScheduleEditor';
 
 const DAYS = [
   { id: 'lun', label: 'Lunes' },
@@ -38,9 +39,7 @@ const Settings = () => {
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
-  const [workingDays, setWorkingDays] = useState<string[]>([]);
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('18:00');
+  const [schedule, setSchedule] = useState<WeekSchedule>(emptySchedule());
   const [appointmentDuration, setAppointmentDuration] = useState('45');
   const [services, setServices] = useState<{ name: string; price: string; duration: string }[]>([]);
   const [surchargeAfter, setSurchargeAfter] = useState('');
@@ -79,9 +78,7 @@ const Settings = () => {
       setAddress(barber.address || '');
       setPhone(barber.phone_number || '');
       setWhatsappNumber((barber as any).whatsapp_number || '');
-      setWorkingDays(barber.working_days || []);
-      setStartTime(barber.working_hours_start || '09:00');
-      setEndTime(barber.working_hours_end || '18:00');
+      setSchedule(scheduleFromBarber(barber));
       setAppointmentDuration(String((barber as any).appointment_duration || 45));
       setServices((((barber as any).services) || []).map((s: any) => ({
         name: s.name || '',
@@ -92,10 +89,6 @@ const Settings = () => {
       setSurchargeAmount((barber as any).surcharge_amount != null ? String((barber as any).surcharge_amount) : '');
     }
   }, [barber]);
-
-  const toggleDay = (day: string) => {
-    setWorkingDays((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]);
-  };
 
   const addService = () => setServices((p) => [...p, { name: '', price: '', duration: appointmentDuration || '30' }]);
   const removeService = (i: number) => setServices((p) => p.filter((_, idx) => idx !== i));
@@ -115,7 +108,7 @@ const Settings = () => {
     const { error } = await supabase.from('barbers').update({
       name, shop_name: shopName, address, phone_number: phone,
       whatsapp_number: whatsappNumber,
-      working_days: workingDays, working_hours_start: startTime, working_hours_end: endTime,
+      ...barberFieldsFromSchedule(schedule),
       appointment_duration: parseInt(appointmentDuration, 10),
       services: cleanServices,
       surcharge_after: surchargeAfter || null,
@@ -200,26 +193,9 @@ const Settings = () => {
           <Separator />
 
           <div className="space-y-3">
-            <Label>Días laborables</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {DAYS.map((day) => (
-                <label key={day.id} className="flex items-center gap-2 p-3 rounded-lg bg-secondary cursor-pointer">
-                  <Checkbox checked={workingDays.includes(day.id)} onCheckedChange={() => toggleDay(day.id)} />
-                  <span className="text-sm">{day.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Hora de inicio</Label>
-              <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Hora de cierre</Label>
-              <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-            </div>
+            <Label>Días y horario de trabajo</Label>
+            <p className="text-xs text-muted-foreground">Marca los días que trabajas y define la apertura y cierre de cada uno (pueden variar).</p>
+            <WeeklyScheduleEditor value={schedule} onChange={setSchedule} />
           </div>
 
           <Button onClick={handleSave} className="w-full gold-gradient text-primary-foreground font-semibold" disabled={saving}>

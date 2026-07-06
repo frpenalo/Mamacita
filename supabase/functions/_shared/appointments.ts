@@ -29,6 +29,7 @@ export interface Barber {
   services?: { name: string; price: number; duration_min: number }[] | null;
   surcharge_after?: string | null;
   surcharge_amount?: number | null;
+  working_hours?: Record<string, { start: string; end: string }> | null;
 }
 
 export interface Slot {
@@ -56,13 +57,24 @@ const overlaps = (aS: number, aE: number, bS: number, bE: number) => aS < bE && 
 export async function getAvailableSlots(supabase: Supa, barber: Barber, dateStr: string, durationOverride?: number | null): Promise<Slot[]> {
   const tz = barber.timezone || "America/New_York";
   const duration = durationOverride || barber.appointment_duration || 45;
-  const workStart = (barber.working_hours_start || "09:00:00").slice(0, 5);
-  const workEnd = (barber.working_hours_end || "18:00:00").slice(0, 5);
 
-  // ¿Trabaja ese día de la semana? (weekday civil, no depende de la zona)
+  // Día de la semana (weekday civil, no depende de la zona).
   const dow = new Date(`${dateStr}T12:00:00Z`).getUTCDay();
-  if (barber.working_days && barber.working_days.length > 0 && !barber.working_days.includes(DOW_ES[dow])) {
-    return [];
+  const dowKey = DOW_ES[dow];
+
+  // Horario del día: si hay working_hours (por día), manda; si no, legacy (working_days + fijo).
+  let workStart: string;
+  let workEnd: string;
+  const wh = barber.working_hours;
+  if (wh && Object.keys(wh).length > 0) {
+    const dh = wh[dowKey];
+    if (!dh || !dh.start || !dh.end) return []; // ese día no trabaja
+    workStart = String(dh.start).slice(0, 5);
+    workEnd = String(dh.end).slice(0, 5);
+  } else {
+    if (barber.working_days && barber.working_days.length > 0 && !barber.working_days.includes(dowKey)) return [];
+    workStart = (barber.working_hours_start || "09:00:00").slice(0, 5);
+    workEnd = (barber.working_hours_end || "18:00:00").slice(0, 5);
   }
 
   // Generar los slots en la zona del barbero, como instantes UTC.
