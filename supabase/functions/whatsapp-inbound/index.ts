@@ -26,7 +26,7 @@ const corsHeaders = {
 const WA_CODE_RE = /agendar[-_\s]*([ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6})/i;
 
 // Campos del barbero que el agente necesita (zona, horario, duración, contacto).
-const BARBER_FIELDS = "id, name, timezone, working_days, working_hours_start, working_hours_end, appointment_duration, whatsapp_number, phone_number";
+const BARBER_FIELDS = "id, name, timezone, working_days, working_hours_start, working_hours_end, appointment_duration, whatsapp_number, phone_number, services, surcharge_after, surcharge_amount";
 
 // ---- Verificación de firma de Twilio (HMAC-SHA1 sobre URL + params ordenados, base64) ----
 async function twilioSignature(authToken: string, url: string, params: Record<string, string>): Promise<string> {

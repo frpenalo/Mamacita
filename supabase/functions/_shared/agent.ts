@@ -35,7 +35,10 @@ const TOOLS: any[] = [
         "Consulta los horarios REALES disponibles del barbero para una fecha. Úsala SIEMPRE antes de ofrecer horas; nunca inventes disponibilidad.",
       parameters: {
         type: "object",
-        properties: { date: { type: "string", description: "Fecha en formato YYYY-MM-DD" } },
+        properties: {
+          date: { type: "string", description: "Fecha en formato YYYY-MM-DD" },
+          service: { type: "string", description: "Opcional: nombre del servicio que eligió el cliente (de la lista de Servicios y precios), para usar su duración. Omítelo si aún no eligió." },
+        },
         required: ["date"],
       },
     },
@@ -52,6 +55,7 @@ const TOOLS: any[] = [
           date: { type: "string", description: "Fecha YYYY-MM-DD" },
           time: { type: "string", description: "La hora elegida EXACTAMENTE como apareció en get_available_slots, ej '3:00 PM'" },
           client_name: { type: "string", description: "Nombre del cliente para la cita" },
+          service: { type: "string", description: "Opcional: el servicio elegido (de la lista), para usar su duración y precio." },
         },
         required: ["date", "time", "client_name"],
       },
@@ -106,14 +110,24 @@ function buildDateContext(tz: string): string {
 function buildSystemPrompt(barber: Barber, knownName: string | null): string {
   const tz = barber.timezone || "America/New_York";
   const duration = barber.appointment_duration || 45;
+  const services = barber.services || [];
+  let pricingBlock = "";
+  if (services.length > 0) {
+    const lines = services.map((s) => `  - ${s.name}: $${s.price} (${s.duration_min} min)`).join("\n");
+    pricingBlock = `\nServicios y precios de ${barber.name}:\n${lines}\n`;
+    if (barber.surcharge_after && barber.surcharge_amount) {
+      pricingBlock += `Recargo por hora tardía: para citas a las ${barber.surcharge_after.slice(0, 5)} o después, suma $${barber.surcharge_amount} al precio.\n`;
+    }
+    pricingBlock += `- Si el cliente pregunta precios, respóndelos desde esta lista.\n- Cuando el cliente elija un servicio, pásalo en el parámetro "service" de get_available_slots y book_appointment (para usar su duración).\n- Antes de confirmar, dile el precio del servicio (súmale el recargo si la hora aplica).\n`;
+  }
   const knownBlock = knownName
     ? `\nEste cliente YA es conocido: se llama ${knownName}. Salúdalo por su nombre ("¡Hola de nuevo, ${knownName}!") y NO le pidas el nombre — ya lo tienes, úsalo directo al agendar.\n`
     : "";
   return `Eres el asistente de citas de ${barber.name} por WhatsApp. Atiendes a sus clientes para AGENDAR CITAS a hora fija.
 
 ${buildDateContext(tz)}
-Cada cita dura ${duration} minutos.
-${knownBlock}
+Cada cita dura ${duration} minutos por defecto (algunos servicios tienen su propia duración).
+${pricingBlock}${knownBlock}
 Cómo trabajas:
 1. Saluda cordialmente como el asistente de ${barber.name}.
 2. Averigua qué día y en qué franja quiere venir el cliente.
@@ -129,7 +143,7 @@ Reglas:
 - Sé breve y cálido, estilo WhatsApp: 1-3 líneas, algún emoji.
 - Interpreta fechas relativas ("mañana", "el sábado") con las fechas de referencia de arriba.
 - El primer mensaje puede ser un código de activación (ej. "agendar-XXXXXX"): ignóralo como texto, saluda y pregunta para cuándo quiere su cita.
-- Si preguntan cosas fuera de agendar (precios, servicios, ubicación exacta), responde con lo que sepas o invítalos a llamar; NO inventes datos.`;
+- Si preguntan por precios o servicios, respóndelos desde la lista de "Servicios y precios" de arriba (si no hay lista, invítalos a llamar). Para ubicación u otras dudas, responde lo que sepas o invítalos a llamar; NO inventes datos.`;
 }
 
 // deno-lint-ignore no-explicit-any
@@ -149,6 +163,29 @@ async function callLLM(messages: any[]): Promise<any> {
   return data.choices[0].message;
 }
 
+/** Resuelve un servicio por nombre (tolerante) contra la lista del barbero. */
+function resolveService(barber: Barber, name: string | undefined | null) {
+  const services = barber.services || [];
+  if (!name || services.length === 0) return null;
+  const n = String(name).toLowerCase().trim();
+  return (
+    services.find((s) => s.name.toLowerCase().trim() === n) ||
+    services.find((s) => s.name.toLowerCase().includes(n) || n.includes(s.name.toLowerCase())) ||
+    null
+  );
+}
+
+/** Precio del servicio + recargo si la cita cae a/después de surcharge_after (zona del barbero). */
+function priceForSlot(barber: Barber, svc: { price: number } | null, slotStartUtc: string, tz: string): number | null {
+  if (!svc) return null;
+  let price = svc.price;
+  if (barber.surcharge_after && barber.surcharge_amount) {
+    const slotHHmm = formatInTimeZone(slotStartUtc, tz, "HH:mm");
+    if (slotHHmm >= String(barber.surcharge_after).slice(0, 5)) price += barber.surcharge_amount;
+  }
+  return price;
+}
+
 async function executeTool(
   supabase: Supa,
   barber: Barber,
@@ -162,7 +199,8 @@ async function executeTool(
   const tz = barber.timezone || "America/New_York";
 
   if (name === "get_available_slots") {
-    const slots = await getAvailableSlots(supabase, barber, args.date);
+    const svc = resolveService(barber, args.service);
+    const slots = await getAvailableSlots(supabase, barber, args.date, svc?.duration_min);
     if (slots.length === 0) {
       return JSON.stringify({ date: args.date, available: [], note: "No hay horarios disponibles ese día." });
     }
@@ -170,8 +208,9 @@ async function executeTool(
   }
 
   if (name === "book_appointment") {
+    const svc = resolveService(barber, args.service);
     // Re-resolvemos el hueco por (fecha, etiqueta de hora): nunca confiamos en timestamps del LLM.
-    const slots = await getAvailableSlots(supabase, barber, args.date);
+    const slots = await getAvailableSlots(supabase, barber, args.date, svc?.duration_min);
     const slot = slots.find((s) => s.label.toLowerCase() === String(args.time || "").toLowerCase().trim());
     if (!slot) return JSON.stringify({ ok: false, reason: "ese horario ya no está disponible; ofrece otro de la lista" });
 
@@ -191,7 +230,8 @@ async function executeTool(
       await notifyBarberNewAppointment(supabase, barber, { clientName, code: result.code!, startUtc: slot.startUtc });
       // Bloque 6: programar los recordatorios 24h + 2h.
       await scheduleReminders(supabase, { appointmentId: result.appointmentId!, barberId: barber.id, startUtc: slot.startUtc });
-      return JSON.stringify({ ok: true, date: args.date, time: slot.label, code: result.code });
+      const price = priceForSlot(barber, svc, slot.startUtc, tz);
+      return JSON.stringify({ ok: true, date: args.date, time: slot.label, code: result.code, service: svc?.name, price });
     }
     if (result.reason === "slot_taken") return JSON.stringify({ ok: false, reason: "acaban de tomar ese horario; ofrece otro" });
     return JSON.stringify({ ok: false, reason: "no se pudo agendar; intenta de nuevo" });

@@ -26,6 +26,9 @@ export interface Barber {
   whatsapp_number?: string | null;
   phone_number?: string | null;
   address?: string | null;
+  services?: { name: string; price: number; duration_min: number }[] | null;
+  surcharge_after?: string | null;
+  surcharge_amount?: number | null;
 }
 
 export interface Slot {
@@ -50,9 +53,9 @@ const overlaps = (aS: number, aE: number, bS: number, bE: number) => aS < bE && 
  * Huecos disponibles de un barbero para una fecha (YYYY-MM-DD), en su zona horaria.
  * Filtra: fuera de días laborables, pasados, con cita activa, con tiempo bloqueado.
  */
-export async function getAvailableSlots(supabase: Supa, barber: Barber, dateStr: string): Promise<Slot[]> {
+export async function getAvailableSlots(supabase: Supa, barber: Barber, dateStr: string, durationOverride?: number | null): Promise<Slot[]> {
   const tz = barber.timezone || "America/New_York";
-  const duration = barber.appointment_duration || 45;
+  const duration = durationOverride || barber.appointment_duration || 45;
   const workStart = (barber.working_hours_start || "09:00:00").slice(0, 5);
   const workEnd = (barber.working_hours_end || "18:00:00").slice(0, 5);
 
