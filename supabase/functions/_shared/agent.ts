@@ -14,7 +14,7 @@ import {
   rescheduleAppointment,
   type Barber,
 } from "./appointments.ts";
-import { formatPhoneForWhatsApp, sendWhatsApp } from "./whatsapp.ts";
+import { formatPhoneForWhatsApp, sendWhatsApp, sendWhatsAppMedia } from "./whatsapp.ts";
 import { notifyBarberChange, notifyBarberNewAppointment } from "./barber.ts";
 import { scheduleReminders } from "./reminders.ts";
 
@@ -230,6 +230,9 @@ async function executeTool(
       await notifyBarberNewAppointment(supabase, barber, { clientName, code: result.code!, startUtc: slot.startUtc });
       // Bloque 6: programar los recordatorios 24h + 2h.
       await scheduleReminders(supabase, { appointmentId: result.appointmentId!, barberId: barber.id, startUtc: slot.startUtc });
+      // Adjunto .ics para "agregar al calendario" (dentro de la ventana 24h: el cliente acaba de escribir).
+      const icsUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/appointment-ics?id=${result.appointmentId}`;
+      await sendWhatsAppMedia(formatPhoneForWhatsApp(clientPhone), icsUrl, "📅 Agrega tu cita a tu calendario (toca el archivo).");
       const price = priceForSlot(barber, svc, slot.startUtc, tz);
       return JSON.stringify({ ok: true, date: args.date, time: slot.label, code: result.code, service: svc?.name, price });
     }
