@@ -1,10 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { User, Phone, Calendar, Plus } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { User, Phone, Calendar, Plus, Pencil, Check, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from 'sonner';
 
 interface Props {
   open: boolean;
@@ -45,6 +48,27 @@ const ClientDetailDialog = ({ open, onOpenChange, client, onCreateAppointment }:
     enabled: !!client && open,
   });
 
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (client) { setName(client.name || ''); setEditing(false); }
+  }, [client]);
+
+  const saveClient = async () => {
+    if (!client) return;
+    if (!name.trim()) { toast.error('El nombre no puede estar vacío'); return; }
+    setSaving(true);
+    const { error } = await supabase.from('customers').update({ name: name.trim() }).eq('id', client.id);
+    setSaving(false);
+    if (error) { toast.error('No se pudo guardar'); return; }
+    toast.success('Cliente actualizado');
+    setEditing(false);
+    queryClient.invalidateQueries({ queryKey: ['clients'] });
+  };
+
   if (!client) return null;
 
   const formatAppointmentStart = (d: string) => new Date(d).toLocaleString('es-US', {
@@ -65,20 +89,39 @@ const ClientDetailDialog = ({ open, onOpenChange, client, onCreateAppointment }:
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Client info */}
-          <div className="flex items-center gap-3 p-4 rounded-lg bg-secondary">
-            <div className="h-12 w-12 rounded-full bg-background flex items-center justify-center">
+          {/* Client info (nombre editable; teléfono de solo-lectura = identidad WhatsApp) */}
+          <div className="flex items-start gap-3 p-4 rounded-lg bg-secondary">
+            <div className="h-12 w-12 rounded-full bg-background flex items-center justify-center shrink-0">
               <User className="h-6 w-6 text-primary" />
             </div>
-            <div>
-              <p className="font-semibold">{client.name}</p>
-              {client.phone_number && (
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <Phone className="h-3 w-3" /> {client.phone_number}
-                </p>
-              )}
-              <p className="text-xs text-muted-foreground">{client.total_visits || 0} visitas</p>
-            </div>
+            {editing ? (
+              <div className="flex-1 space-y-2">
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre del cliente" autoFocus />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={saveClient} disabled={saving} className="gold-gradient text-primary-foreground font-semibold">
+                    <Check className="h-4 w-4 mr-1" /> {saving ? 'Guardando...' : 'Guardar'}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => { setEditing(false); setName(client.name || ''); }}>
+                    <X className="h-4 w-4 mr-1" /> Cancelar
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold truncate">{name}</p>
+                  {client.phone_number && (
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Phone className="h-3 w-3" /> {client.phone_number}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">{client.total_visits || 0} visitas</p>
+                </div>
+                <button onClick={() => setEditing(true)} className="p-1.5 rounded-md hover:bg-background transition-colors shrink-0" aria-label="Editar nombre">
+                  <Pencil className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </div>
+            )}
           </div>
 
           {onCreateAppointment && (
