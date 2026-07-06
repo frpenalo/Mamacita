@@ -10,6 +10,7 @@ import { formatInTimeZone } from "https://esm.sh/date-fns-tz@3.2.0";
 import { formatPhoneForWhatsApp, sendTemplate, sendWhatsApp } from "./whatsapp.ts";
 import { cancelReminders } from "./reminders.ts";
 import type { Barber } from "./appointments.ts";
+import { startNegotiation } from "./negotiation.ts";
 
 // deno-lint-ignore no-explicit-any
 type Supa = any;
@@ -55,7 +56,7 @@ export async function notifyBarberNewAppointment(
 
   // Si la plantilla con botones ya está aprobada (SID en secret), usarla: llega SIEMPRE
   // (fuera de la ventana de 24h) y con botones Confirmar/Cancelar.
-  const tplSid = Deno.env.get("TWILIO_TPL_CITA_NUEVA_BARBERO");
+  const tplSid = Deno.env.get("TWILIO_TPL_CITA_NUEVA_BARBERO_V2") || Deno.env.get("TWILIO_TPL_CITA_NUEVA_BARBERO");
   if (tplSid) {
     const sent = await sendTemplate(formatPhoneForWhatsApp(to), tplSid, {
       "1": info.clientName || "Cliente",
@@ -80,14 +81,15 @@ export async function handleBarberCommand(supabase: Supa, barber: Barber, text: 
   const to = barberPhone(barber);
   const lower = text.toLowerCase();
   const isCancel = /\b(cancel(ar|a|o)?|rechaz(ar|a|o)|reject)\b/.test(lower);
-  const isConfirm = /\b(confirm(ar|o|a)?|s[ií]|ok|dale|listo)\b/.test(lower);
+  const isModify = /\b(modific(ar|a|o|ación)?|cambiar|mover)\b/.test(lower);
+  const isConfirm = !isModify && /\b(acept(ar|o|a)?|confirm(ar|o|a)?|s[ií]|ok|dale|listo)\b/.test(lower);
   const codeMatch = text.toUpperCase().match(/\b([ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6})\b/);
 
-  if (!isCancel && !isConfirm) {
+  if (!isCancel && !isConfirm && !isModify) {
     if (to) {
       await sendWhatsApp(
         formatPhoneForWhatsApp(to),
-        "Para gestionar una cita responde *CONFIRMAR <código>* o *CANCELAR <código>*.",
+        "Para gestionar una cita responde *Aceptar*, *Modificar* o *Cancelar*.",
       );
     }
     return;
@@ -96,7 +98,7 @@ export async function handleBarberCommand(supabase: Supa, barber: Barber, text: 
   // Localizar la cita: por código si lo dieron; si no, la próxima cita futura más reciente.
   let query = supabase
     .from("appointments")
-    .select("id, start_time, status, customer_id, customers(name, phone_number)")
+    .select("id, start_time, end_time, status, customer_id, customers(name, phone_number)")
     .eq("barber_id", barber.id)
     .eq("status", "confirmed");
   if (codeMatch) {
@@ -116,6 +118,12 @@ export async function handleBarberCommand(supabase: Supa, barber: Barber, text: 
   const when = formatApptEs(appt.start_time, tz);
   // deno-lint-ignore no-explicit-any
   const cust = (appt as any).customers;
+
+  // MODIFICAR → arranca la negociación de cambio de hora (barbero ↔ cliente).
+  if (isModify) {
+    await startNegotiation(supabase, barber, appt as any);
+    return;
+  }
 
   if (isCancel) {
     await supabase.from("appointments").update({ status: "cancelled" }).eq("id", appt.id);

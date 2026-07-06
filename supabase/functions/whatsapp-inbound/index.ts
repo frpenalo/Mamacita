@@ -14,6 +14,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { formatPhoneForWhatsApp, sendWhatsApp } from "../_shared/whatsapp.ts";
 import { runAgent } from "../_shared/agent.ts";
+import { checkNegotiation, handleNegotiationTurn } from "../_shared/negotiation.ts";
 import { findBarberByPhone, handleBarberCommand } from "../_shared/barber.ts";
 import type { Barber } from "../_shared/appointments.ts";
 
@@ -97,8 +98,24 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // --- ¿Es un BARBERO gestionando sus citas? (CONFIRMAR / CANCELAR) ---
+    // --- ¿Es un BARBERO gestionando sus citas? (Aceptar / Modificar / Cancelar) ---
     const barberSender = await findBarberByPhone(supabase, fromPhone);
+
+    // --- ¿Hay una negociación de cambio de cita activa en el turno del remitente? ---
+    // Chequeo RÁPIDO (sin LLM); si hay, se maneja en background y no sigue el flujo normal.
+    const negoCtx = await checkNegotiation(supabase, fromPhone, barberSender);
+    if (negoCtx) {
+      const work = handleNegotiationTurn(supabase, negoCtx, body);
+      // @ts-ignore EdgeRuntime existe en Supabase Edge Functions
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(work);
+      } else {
+        await work;
+      }
+      return emptyTwiml();
+    }
+
     if (barberSender) {
       const work = handleBarberCommand(supabase, barberSender, body);
       // @ts-ignore EdgeRuntime existe en Supabase Edge Functions
