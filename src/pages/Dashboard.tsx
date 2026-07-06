@@ -3,13 +3,15 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBarber } from '@/hooks/useBarber';
 import BottomNav from '@/components/BottomNav';
-import { Plus, Clock, User, Copy, Phone } from 'lucide-react';
+import { Plus, Clock, User, Copy, Phone, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
 import logoIcon from '@/assets/logo.ico';
 import NewAppointmentDialog from '@/components/NewAppointmentDialog';
 import AppointmentActions from '@/components/AppointmentActions';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 const statusColors: Record<string, string> = {
   confirmed: 'bg-primary/20 text-primary',
@@ -55,13 +57,19 @@ const getNextNDays = (count: number) => {
 const Dashboard = () => {
   const { data: barber } = useBarber();
   const [showNewAppt, setShowNewAppt] = useState(false);
-  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
-  const [numDays, setNumDays] = useState(7);
+  const [calOpen, setCalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
 
-  const days = useMemo(() => getNextNDays(numDays), [numDays]);
+  const days = useMemo(() => getNextNDays(7), []);
+  const dateStrOf = (d: Date) => d.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+  const selectedDateStr = dateStrOf(selectedDate);
 
-  const { data: weekAppointments = [], refetch } = useQuery({
-    queryKey: ['appointments-week', barber?.id, days[0]?.dateStr, numDays],
+  const { data: appointments = [], refetch } = useQuery({
+    queryKey: ['appointments-all', barber?.id],
     queryFn: async () => {
       if (!barber) return [];
       const { data, error } = await supabase
@@ -70,31 +78,20 @@ const Dashboard = () => {
         .eq('barber_id', barber.id)
         .order('start_time', { ascending: true });
       if (error) throw error;
-
-      // Filter to only the 7-day window
-      const dayStrs = new Set(days.map(d => d.dateStr));
-      return (data || []).filter((appt: any) => {
-        const apptDate = new Date(appt.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
-        return dayStrs.has(apptDate);
-      });
+      return data || [];
     },
     enabled: !!barber,
   });
 
-  // Group appointments by date string
-  const appointmentsByDay = useMemo(() => {
-    const map: Record<string, any[]> = {};
-    for (const day of days) {
-      map[day.dateStr] = [];
-    }
-    for (const appt of weekAppointments) {
-      const apptDate = new Date(appt.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
-      if (map[apptDate]) {
-        map[apptDate].push(appt);
-      }
+  // Conteo de citas por día (para los badges de los tabs).
+  const countByDay = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const appt of appointments) {
+      const ds = new Date(appt.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+      map[ds] = (map[ds] || 0) + 1;
     }
     return map;
-  }, [weekAppointments, days]);
+  }, [appointments]);
 
   const handleRefresh = () => { refetch(); };
 
@@ -109,8 +106,11 @@ const Dashboard = () => {
       hour12: true,
     });
 
-  const selectedDay = days[selectedDayIndex];
-  const selectedAppointments = selectedDay ? (appointmentsByDay[selectedDay.dateStr] || []) : [];
+  const selectedAppointments = useMemo(
+    () => appointments.filter((a: any) => new Date(a.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' }) === selectedDateStr),
+    [appointments, selectedDateStr],
+  );
+  const selectedLabel = selectedDate.toLocaleDateString('es-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/New_York' });
 
   return (
     <div className="min-h-screen pb-20">
@@ -152,47 +152,64 @@ const Dashboard = () => {
             <Clock className="h-5 w-5 text-primary" /> Citas
           </h2>
 
-          <ScrollArea className="w-full">
-            <div className="flex gap-2 pb-2">
-              {days.map((day, i) => {
-                const count = (appointmentsByDay[day.dateStr] || []).length;
-                const isActive = i === selectedDayIndex;
-                return (
-                  <button
-                    key={day.dateStr}
-                    onClick={() => setSelectedDayIndex(i)}
-                    className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${
-                      isActive
-                        ? 'text-primary-foreground shadow-md'
-                        : 'bg-secondary text-muted-foreground hover:text-foreground'
-                    }`}
-                    style={isActive ? { backgroundColor: '#C9A96E' } : undefined}
-                  >
-                    {day.label}
-                    {count > 0 && (
-                      <Badge
-                        variant={isActive ? 'secondary' : 'default'}
-                        className="h-5 min-w-5 flex items-center justify-center px-1.5 text-[10px]"
-                      >
-                        {count}
-                      </Badge>
-                    )}
-                  </button>
-                );
-              })}
-              <button
-                onClick={() => setNumDays((n) => Math.min(n + 7, 60))}
-                disabled={numDays >= 60}
-                className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                aria-label="Ver más días"
-              >
-                <Plus className="h-4 w-4" /> Más
-              </button>
-            </div>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
+          <div className="flex items-center gap-2">
+            <ScrollArea className="w-full">
+              <div className="flex gap-2 pb-2">
+                {days.map((day) => {
+                  const count = countByDay[day.dateStr] || 0;
+                  const isActive = day.dateStr === selectedDateStr;
+                  return (
+                    <button
+                      key={day.dateStr}
+                      onClick={() => setSelectedDate(day.date)}
+                      className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${
+                        isActive
+                          ? 'text-primary-foreground shadow-md'
+                          : 'bg-secondary text-muted-foreground hover:text-foreground'
+                      }`}
+                      style={isActive ? { backgroundColor: '#C9A96E' } : undefined}
+                    >
+                      {day.label}
+                      {count > 0 && (
+                        <Badge
+                          variant={isActive ? 'secondary' : 'default'}
+                          className="h-5 min-w-5 flex items-center justify-center px-1.5 text-[10px]"
+                        >
+                          {count}
+                        </Badge>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
 
-          <div className="mt-3">
+            {/* Calendario: saltar a cualquier fecha */}
+            <Popover open={calOpen} onOpenChange={setCalOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Elegir fecha en el calendario"
+                >
+                  <CalendarDays className="h-5 w-5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(d) => { if (d) { const nd = new Date(d); nd.setHours(0, 0, 0, 0); setSelectedDate(nd); setCalOpen(false); } }}
+                  initialFocus
+                  className="p-3 pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <p className="mt-3 text-sm font-medium capitalize">{selectedLabel}</p>
+
+          <div className="mt-2">
             {selectedAppointments.length === 0 ? (
               <div className="bg-card rounded-lg p-6 text-center">
                 <p className="text-muted-foreground">No hay citas para este día</p>
