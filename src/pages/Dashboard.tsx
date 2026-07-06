@@ -27,11 +27,11 @@ const statusLabels: Record<string, string> = {
   rescheduled: 'Reagendada',
 };
 
-const getNext7Days = () => {
+const getNextNDays = (count: number) => {
   const days: { date: Date; dateStr: string; label: string }[] = [];
   const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
 
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < count; i++) {
     const d = new Date(now);
     d.setDate(now.getDate() + i);
     d.setHours(0, 0, 0, 0);
@@ -56,11 +56,12 @@ const Dashboard = () => {
   const { data: barber } = useBarber();
   const [showNewAppt, setShowNewAppt] = useState(false);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  const [numDays, setNumDays] = useState(7);
 
-  const days = useMemo(() => getNext7Days(), []);
+  const days = useMemo(() => getNextNDays(numDays), [numDays]);
 
   const { data: weekAppointments = [], refetch } = useQuery({
-    queryKey: ['appointments-week', barber?.id, days[0]?.dateStr],
+    queryKey: ['appointments-week', barber?.id, days[0]?.dateStr, numDays],
     queryFn: async () => {
       if (!barber) return [];
       const { data, error } = await supabase
@@ -179,6 +180,14 @@ const Dashboard = () => {
                   </button>
                 );
               })}
+              <button
+                onClick={() => setNumDays((n) => Math.min(n + 7, 60))}
+                disabled={numDays >= 60}
+                className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                aria-label="Ver más días"
+              >
+                <Plus className="h-4 w-4" /> Más
+              </button>
             </div>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
