@@ -27,8 +27,8 @@ const normPhone = (p: string) => (p || "").replace(/\D/g, "").slice(-10);
 const apptDurationMin = (a: { start_time: string; end_time: string }) =>
   Math.max(15, Math.round((new Date(a.end_time).getTime() - new Date(a.start_time).getTime()) / 60000));
 
-/** Interpreta fecha+hora de un texto libre con el LLM (relativos incluidos). */
-async function extractDateTime(text: string, tz: string): Promise<{ date: string; time: string } | null> {
+/** Interpreta fecha+hora de un texto libre con el LLM (relativos + contexto barbería). */
+async function extractDateTime(text: string, tz: string): Promise<{ date: string | null; time: string } | null> {
   const key = Deno.env.get("OPENAI_API_KEY");
   if (!key) return null;
   const todayStr = formatInTimeZone(new Date(), tz, "yyyy-MM-dd");
@@ -39,7 +39,7 @@ async function extractDateTime(text: string, tz: string): Promise<{ date: string
     const tag = i === 0 ? " (hoy)" : i === 1 ? " (mañana)" : "";
     refs.push(`${d.toISOString().slice(0, 10)}=${DOW_FULL[d.getUTCDay()]}${tag}`);
   }
-  const sys = `Extrae la FECHA y HORA que menciona el mensaje. Referencia de fechas: ${refs.join(", ")}. Responde SOLO JSON {"date":"YYYY-MM-DD","time":"h:mm AM/PM"} si hay una hora concreta; si no hay hora clara, {"date":null,"time":null}. Interpreta relativos ("mañana", "el jueves", "a las 3", "3pm").`;
+  const sys = `Extrae la FECHA y HORA del mensaje para una BARBERÍA (horario diurno, ~7 AM a 9 PM). Referencia de fechas: ${refs.join(", ")}. Responde SOLO JSON {"date":"YYYY-MM-DD" o null,"time":"h:mm AM/PM" o null}. Reglas: si dan una HORA pero NO el día, deja date=null (NO inventes el día). Si la hora resultante cae de madrugada (12 AM–6 AM) y no tiene sentido para una barbería, asume PM (ej. "12"→"12:00 PM", "12 am"→"12:00 PM"). Interpreta relativos ("mañana","el jueves","a las 3","3pm","11:30").`;
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -54,10 +54,23 @@ async function extractDateTime(text: string, tz: string): Promise<{ date: string
     const data = await res.json();
     if (!res.ok) return null;
     const p = JSON.parse(data.choices[0].message.content || "{}");
-    return p.date && p.time ? { date: p.date, time: p.time } : null;
+    return p.time ? { date: p.date || null, time: p.time } : null;
   } catch {
     return null;
   }
+}
+
+/** Resuelve el hueco desde {date,time}. Sin día → busca el primer día disponible con esa hora. */
+async function resolveSlot(supabase: Supa, barber: Barber, tz: string, dt: { date: string | null; time: string }, durationMin: number) {
+  if (dt.date) return await findSlot(supabase, barber, dt.date, dt.time, durationMin);
+  const todayStr = formatInTimeZone(new Date(), tz, "yyyy-MM-dd");
+  const base = new Date(`${todayStr}T12:00:00Z`).getTime();
+  for (let i = 0; i < 7; i++) {
+    const dateStr = new Date(base + i * 86400000).toISOString().slice(0, 10);
+    const s = await findSlot(supabase, barber, dateStr, dt.time, durationMin);
+    if (s) return s;
+  }
+  return null;
 }
 
 /** Busca el hueco (fecha, etiqueta de hora) disponible del barbero con la duración de la cita. */
@@ -91,7 +104,7 @@ async function getCust(supabase: Supa, id: string) {
   return data;
 }
 const setStatus = (supabase: Supa, id: string, patch: Record<string, unknown>) =>
-  supabase.from("negotiations").update(patch).eq("id", id);
+  supabase.from("negotiations").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id);
 
 /** El barbero tocó [Modificar]: crea la negociación y le muestra sus huecos. */
 export async function startNegotiation(
@@ -146,14 +159,28 @@ async function handleBarberTurn(supabase: Supa, neg: any, barber: Barber, text: 
     if (neg.status === "barber_deciding" && cust?.phone_number) await sendWhatsApp(formatPhoneForWhatsApp(cust.phone_number), "Al final tu cita queda como estaba. ¡Te esperamos!");
     return;
   }
+  // Volvió a tocar "Modificar" (quizás sobre otra cita): reinicia con la cita más reciente.
+  if (/\bmodific/i.test(text)) {
+    await setStatus(supabase, neg.id, { status: "cancelled" });
+    const { data: recent } = await supabase.from("appointments")
+      .select("id, start_time, end_time, customer_id, customers(name, phone_number)")
+      .eq("barber_id", barber.id).eq("status", "confirmed")
+      .gte("start_time", new Date().toISOString()).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (recent) await startNegotiation(supabase, barber, recent as any);
+    else if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), "No tienes una cita próxima para modificar.");
+    return;
+  }
   if (neg.status === "barber_deciding" && isAccept(text) && neg.proposed_start_utc) {
     await closeNegotiation(supabase, neg, barber, appt, cust, tz);
     return;
   }
   const dt = await extractDateTime(text, tz);
-  if (!dt) { if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), 'No entendí la hora. Dime el día y la hora (ej. "mañana 3 PM"), o "cancelar".'); return; }
-  const slot = await findSlot(supabase, barber, dt.date, dt.time, durationMin);
-  if (!slot) { if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), "Esa hora no te queda libre. Dime otra de tus horas disponibles."); return; }
+  const slot = dt ? await resolveSlot(supabase, barber, tz, dt, durationMin) : null;
+  if (!slot) {
+    const msg = await upcomingSlotsMsg(supabase, barber, tz, durationMin);
+    if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), `No pude tomar esa hora.${msg}\nDime una de esas horas, o "cancelar".`);
+    return;
+  }
   await setStatus(supabase, neg.id, { status: "client_deciding", proposed_start_utc: slot.startUtc, proposed_end_utc: slot.endUtc });
   if (cust?.phone_number) await sendWhatsApp(formatPhoneForWhatsApp(cust.phone_number),
     `Hola${cust.name ? " " + cust.name : ""} 👋 ${barber.name} necesita mover tu cita. ¿Te sirve el ${formatApptEs(slot.startUtc, tz)}? Responde *SÍ*, o dime otra hora que prefieras.`);
@@ -185,9 +212,8 @@ async function handleClientTurn(supabase: Supa, neg: any, barber: Barber, text: 
     return;
   }
   const dt = await extractDateTime(text, tz);
-  if (!dt) { await sendWhatsApp(formatPhoneForWhatsApp(clientPhone), 'No entendí la hora. Dime el día y la hora que prefieres (ej. "el jueves a las 4 PM"), o responde *SÍ* si te sirve la que te propuse.'); return; }
-  const slot = await findSlot(supabase, barber, dt.date, dt.time, durationMin);
-  if (!slot) { await sendWhatsApp(formatPhoneForWhatsApp(clientPhone), "Esa hora no está disponible 😕. Dime otra, por favor."); return; }
+  const slot = dt ? await resolveSlot(supabase, barber, tz, dt, durationMin) : null;
+  if (!slot) { await sendWhatsApp(formatPhoneForWhatsApp(clientPhone), 'No pude tomar esa hora 😕. Dime el día y la hora que prefieres (ej. "el jueves 4 PM"), o responde *SÍ* si te sirve la que te propuse.'); return; }
   await setStatus(supabase, neg.id, { status: "barber_deciding", proposed_start_utc: slot.startUtc, proposed_end_utc: slot.endUtc, rounds: (neg.rounds || 0) + 1 });
   if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), `El cliente prefiere el ${formatApptEs(slot.startUtc, tz)}. ¿Puedes? Responde *SÍ*, u ofrécele otra hora.`);
   await sendWhatsApp(formatPhoneForWhatsApp(clientPhone), "Le pregunto al barbero y te confirmo. ⏳");
@@ -209,10 +235,12 @@ export interface NegotiationCtx {
 export async function checkNegotiation(supabase: Supa, senderPhone: string, barberSender: Barber | null): Promise<NegotiationCtx | null> {
   const phone = senderPhone.replace(/^whatsapp:/, "");
   const sN = normPhone(phone);
+  // Ignora negociaciones atascadas (sin actividad en >3h): así un "Modificar" nuevo arranca limpio.
+  const fresh = (n: any) => Date.now() - new Date(n.updated_at || n.created_at).getTime() < 3 * 3600 * 1000;
   try {
     // ¿Es el CLIENTE respondiendo (client_deciding)?
     const { data: cNegs } = await supabase.from("negotiations").select("*").eq("status", "client_deciding");
-    const cNeg = (cNegs || []).find((n: any) => normPhone(n.client_phone) === sN);
+    const cNeg = (cNegs || []).find((n: any) => fresh(n) && normPhone(n.client_phone) === sN);
     if (cNeg) {
       const { data: barber } = await supabase.from("barbers").select("*").eq("id", cNeg.barber_id).maybeSingle();
       if (barber) return { neg: cNeg, role: "client", barber: barber as Barber, clientPhone: phone };
@@ -220,7 +248,7 @@ export async function checkNegotiation(supabase: Supa, senderPhone: string, barb
     // ¿Es el BARBERO (barber_choosing / barber_deciding)?
     if (barberSender) {
       const { data: bNegs } = await supabase.from("negotiations").select("*").eq("barber_id", barberSender.id).in("status", ["barber_choosing", "barber_deciding"]);
-      const bNeg = (bNegs || [])[0];
+      const bNeg = (bNegs || []).filter(fresh)[0];
       if (bNeg) return { neg: bNeg, role: "barber", barber: barberSender };
     }
   } catch (e) {
