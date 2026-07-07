@@ -16,6 +16,7 @@ import { formatPhoneForWhatsApp, sendWhatsApp } from "../_shared/whatsapp.ts";
 import { runAgent } from "../_shared/agent.ts";
 import { checkNegotiation, handleNegotiationTurn } from "../_shared/negotiation.ts";
 import { findBarberByPhone, handleBarberCommand } from "../_shared/barber.ts";
+import { firstAudioMedia, transcribeAudio } from "../_shared/transcribe.ts";
 import type { Barber } from "../_shared/appointments.ts";
 
 const corsHeaders = {
@@ -89,9 +90,28 @@ Deno.serve(async (req) => {
 
     const fromPhone = toE164(params["From"] || "");
     const profileName = params["ProfileName"] || null;
-    const body = (params["Body"] || "").trim();
+    let body = (params["Body"] || "").trim();
     const messageSid = params["MessageSid"] || null;
     if (!fromPhone) return emptyTwiml();
+
+    // --- Nota de voz: si no vino texto pero sí un audio, transcribimos y seguimos en texto ---
+    if (!body) {
+      const audio = firstAudioMedia(params);
+      if (audio) {
+        const text = await transcribeAudio(audio.url, audio.contentType);
+        if (text) {
+          body = text;
+          console.log("[wa-inbound] nota de voz transcrita:", text.slice(0, 80));
+        } else {
+          // No se pudo transcribir → pedir texto amablemente y no seguir con body vacío.
+          await sendWhatsApp(
+            formatPhoneForWhatsApp(fromPhone),
+            "Recibí tu nota de voz pero no logré entenderla bien 🙏. ¿Me lo escribes en un mensajito, por favor?",
+          );
+          return emptyTwiml();
+        }
+      }
+    }
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
