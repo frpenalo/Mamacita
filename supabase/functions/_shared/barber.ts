@@ -11,6 +11,7 @@ import { formatPhoneForWhatsApp, sendTemplate, sendWhatsApp } from "./whatsapp.t
 import { cancelReminders } from "./reminders.ts";
 import type { Barber } from "./appointments.ts";
 import { startNegotiation } from "./negotiation.ts";
+import { formatAppt, getClientLang, t } from "./i18n.ts";
 
 // deno-lint-ignore no-explicit-any
 type Supa = any;
@@ -115,9 +116,12 @@ export async function handleBarberCommand(supabase: Supa, barber: Barber, text: 
   }
 
   const tz = barber.timezone || "America/New_York";
-  const when = formatApptEs(appt.start_time, tz);
+  const when = formatApptEs(appt.start_time, tz); // para los avisos al BARBERO (siempre español)
   // deno-lint-ignore no-explicit-any
   const cust = (appt as any).customers;
+  // Idioma del cliente para localizar SOLO lo que le llega a él.
+  const lang = cust?.phone_number ? await getClientLang(supabase, barber.id, cust.phone_number) : "es";
+  const whenClient = formatAppt(appt.start_time, tz, lang);
 
   // MODIFICAR → arranca la negociación de cambio de hora (barbero ↔ cliente).
   if (isModify) {
@@ -131,7 +135,7 @@ export async function handleBarberCommand(supabase: Supa, barber: Barber, text: 
     if (cust?.phone_number) {
       await sendWhatsApp(
         formatPhoneForWhatsApp(cust.phone_number),
-        `Hola 👋 ${barber.name} tuvo un imprevisto y tuvo que cancelar tu cita del ${when}. Escríbenos cuando quieras para reagendar. 🙏`,
+        t("client_cancelled", lang, { barber: barber.name, when: whenClient }),
       );
     }
     if (to) {
@@ -148,7 +152,7 @@ export async function handleBarberCommand(supabase: Supa, barber: Barber, text: 
   if (cust?.phone_number && address) {
     await sendWhatsApp(
       formatPhoneForWhatsApp(cust.phone_number),
-      `✅ ¡${barber.name} confirmó tu cita del ${when}!\n📍 Dirección: ${address}\n¡Te esperamos! 💈`,
+      t("client_confirmed", lang, { barber: barber.name, when: whenClient, address }),
     );
   }
   if (to) {

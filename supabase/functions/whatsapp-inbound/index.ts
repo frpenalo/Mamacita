@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
           // No se pudo transcribir → pedir texto amablemente y no seguir con body vacío.
           await sendWhatsApp(
             formatPhoneForWhatsApp(fromPhone),
-            "Recibí tu nota de voz pero no logré entenderla bien 🙏. ¿Me lo escribes en un mensajito, por favor?",
+            "Recibí tu nota de voz pero no logré entenderla bien 🙏. ¿Me lo escribes, por favor?\n\nI got your voice note but couldn't quite catch it 🙏. Could you type it out for me, please?",
           );
           return emptyTwiml();
         }
@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
       // Ni citas ni walk-in: fallback neutral.
       await sendWhatsApp(
         formatPhoneForWhatsApp(fromPhone),
-        "¡Hola! 👋 Para agendar una cita, escríbenos usando el enlace que te compartió tu barbero. ¡Gracias!",
+        "¡Hola! 👋 Para agendar una cita, escríbenos usando el enlace que te compartió tu barbero. ¡Gracias!\n\nHi! 👋 To book an appointment, message us using the link your barber shared with you. Thanks!",
       );
       return emptyTwiml();
     }

@@ -13,6 +13,7 @@ import { formatInTimeZone } from "https://esm.sh/date-fns-tz@3.2.0";
 import { getAvailableSlots, rescheduleAppointment, type Barber } from "./appointments.ts";
 import { formatPhoneForWhatsApp, sendWhatsApp } from "./whatsapp.ts";
 import { formatApptEs } from "./barber.ts";
+import { formatAppt, getClientLang, t } from "./i18n.ts";
 
 // deno-lint-ignore no-explicit-any
 type Supa = any;
@@ -39,7 +40,7 @@ export async function extractDateTime(text: string, tz: string): Promise<{ date:
     const tag = i === 0 ? " (hoy)" : i === 1 ? " (mañana)" : "";
     refs.push(`${d.toISOString().slice(0, 10)}=${DOW_FULL[d.getUTCDay()]}${tag}`);
   }
-  const sys = `Extrae la FECHA y HORA del mensaje para una BARBERÍA (horario diurno, ~7 AM a 9 PM). Referencia de fechas: ${refs.join(", ")}. Responde SOLO JSON {"date":"YYYY-MM-DD" o null,"time":"h:mm AM/PM" o null}. Reglas: si dan una HORA pero NO el día, deja date=null (NO inventes el día). Si la hora resultante cae de madrugada (12 AM–6 AM) y no tiene sentido para una barbería, asume PM (ej. "12"→"12:00 PM", "12 am"→"12:00 PM"). Interpreta relativos ("mañana","el jueves","a las 3","3pm","11:30").`;
+  const sys = `Extrae la FECHA y HORA del mensaje para una BARBERÍA (horario diurno, ~7 AM a 9 PM). Referencia de fechas: ${refs.join(", ")}. Responde SOLO JSON {"date":"YYYY-MM-DD" o null,"time":"h:mm AM/PM" o null}. El mensaje puede venir en español, inglés o Spanglish (mezcla); interpreta ambos idiomas. Reglas: si dan una HORA pero NO el día, deja date=null (NO inventes el día). Si la hora resultante cae de madrugada (12 AM–6 AM) y no tiene sentido para una barbería, asume PM (ej. "12"→"12:00 PM", "12 am"→"12:00 PM"). Interpreta relativos en ES/EN ("mañana"/"tomorrow", "el jueves"/"(next) Thursday", "a las 3"/"at 3", "mediodía"/"noon"→"12:00 PM", "3pm", "11:30", "pa'l jueves", "this Friday"/"este viernes").`;
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -133,16 +134,16 @@ export async function startNegotiation(
 async function closeNegotiation(supabase: Supa, neg: any, barber: Barber, appt: any, cust: any, tz: string) {
   const r = await rescheduleAppointment(supabase, { appointmentId: appt.id, barberId: barber.id, newStartUtc: neg.proposed_start_utc, newEndUtc: neg.proposed_end_utc });
   const to = barberPhone(barber);
+  const lang = await getClientLang(supabase, barber.id, cust?.phone_number || neg.client_phone);
   if (!r.ok) {
     await setStatus(supabase, neg.id, { status: "cancelled" });
-    if (cust?.phone_number) await sendWhatsApp(formatPhoneForWhatsApp(cust.phone_number), "Uy, ese horario se acaba de ocupar. Tu cita sigue como estaba; escríbenos para reagendar. 🙏");
+    if (cust?.phone_number) await sendWhatsApp(formatPhoneForWhatsApp(cust.phone_number), t("nego_slot_taken", lang));
     if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), "Ese horario se ocupó justo ahora; la cita quedó como estaba.");
     return;
   }
   await setStatus(supabase, neg.id, { status: "done" });
-  const when = formatApptEs(neg.proposed_start_utc, tz);
-  if (cust?.phone_number) await sendWhatsApp(formatPhoneForWhatsApp(cust.phone_number), `¡Listo! Tu cita quedó movida al ${when}. ¡Te esperamos! 💈`);
-  if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), `✅ Cita movida al ${when} (${cust?.name || "cliente"}). Ambos avisados.`);
+  if (cust?.phone_number) await sendWhatsApp(formatPhoneForWhatsApp(cust.phone_number), t("nego_moved", lang, { when: formatAppt(neg.proposed_start_utc, tz, lang) }));
+  if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), `✅ Cita movida al ${formatApptEs(neg.proposed_start_utc, tz)} (${cust?.name || "cliente"}). Ambos avisados.`);
 }
 
 async function handleBarberTurn(supabase: Supa, neg: any, barber: Barber, text: string) {
@@ -151,12 +152,13 @@ async function handleBarberTurn(supabase: Supa, neg: any, barber: Barber, text: 
   const appt = await getAppt(supabase, neg.appointment_id);
   if (!appt || appt.status === "cancelled") { await setStatus(supabase, neg.id, { status: "cancelled" }); return; }
   const cust = await getCust(supabase, appt.customer_id);
+  const lang = await getClientLang(supabase, barber.id, cust?.phone_number || neg.client_phone);
   const durationMin = apptDurationMin(appt);
 
   if (isBail(text)) {
     await setStatus(supabase, neg.id, { status: "cancelled" });
     if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), "Ok, dejo la cita como estaba. 👍");
-    if (neg.status === "barber_deciding" && cust?.phone_number) await sendWhatsApp(formatPhoneForWhatsApp(cust.phone_number), "Al final tu cita queda como estaba. ¡Te esperamos!");
+    if (neg.status === "barber_deciding" && cust?.phone_number) await sendWhatsApp(formatPhoneForWhatsApp(cust.phone_number), t("nego_kept", lang));
     return;
   }
   // Volvió a tocar "Modificar" (quizás sobre otra cita): reinicia con la cita más reciente.
@@ -183,7 +185,7 @@ async function handleBarberTurn(supabase: Supa, neg: any, barber: Barber, text: 
   }
   await setStatus(supabase, neg.id, { status: "client_deciding", proposed_start_utc: slot.startUtc, proposed_end_utc: slot.endUtc });
   if (cust?.phone_number) await sendWhatsApp(formatPhoneForWhatsApp(cust.phone_number),
-    `Hola${cust.name ? " " + cust.name : ""} 👋 ${barber.name} necesita mover tu cita. ¿Te sirve el ${formatApptEs(slot.startUtc, tz)}? Responde *SÍ*, o dime otra hora que prefieras.`);
+    t("nego_propose", lang, { name: cust.name ? " " + cust.name : "", barber: barber.name, when: formatAppt(slot.startUtc, tz, lang) }));
   if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), `Le propuse ${formatApptEs(slot.startUtc, tz)} al cliente. Te aviso qué dice. ⏳`);
 }
 
@@ -193,11 +195,12 @@ async function handleClientTurn(supabase: Supa, neg: any, barber: Barber, text: 
   const appt = await getAppt(supabase, neg.appointment_id);
   if (!appt || appt.status === "cancelled") { await setStatus(supabase, neg.id, { status: "cancelled" }); return; }
   const cust = await getCust(supabase, appt.customer_id);
+  const lang = await getClientLang(supabase, barber.id, clientPhone);
   const durationMin = apptDurationMin(appt);
 
   if (isBail(text)) {
     await setStatus(supabase, neg.id, { status: "cancelled" });
-    await sendWhatsApp(formatPhoneForWhatsApp(clientPhone), "Ok, dejamos tu cita como estaba. ¡Te esperamos!");
+    await sendWhatsApp(formatPhoneForWhatsApp(clientPhone), t("nego_bail", lang));
     if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), "El cliente prefiere dejar la cita como estaba.");
     return;
   }
@@ -207,16 +210,16 @@ async function handleClientTurn(supabase: Supa, neg: any, barber: Barber, text: 
   }
   if ((neg.rounds || 0) >= MAX_ROUNDS) {
     await setStatus(supabase, neg.id, { status: "cancelled" });
-    await sendWhatsApp(formatPhoneForWhatsApp(clientPhone), "Mejor coordínalo directo por aquí con el barbero. Tu cita sigue como estaba por ahora.");
+    await sendWhatsApp(formatPhoneForWhatsApp(clientPhone), t("nego_max_rounds", lang));
     if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), "No lograron coincidir; la cita queda como estaba.");
     return;
   }
   const dt = await extractDateTime(text, tz);
   const slot = dt ? await resolveSlot(supabase, barber, tz, dt, durationMin) : null;
-  if (!slot) { await sendWhatsApp(formatPhoneForWhatsApp(clientPhone), 'No pude tomar esa hora 😕. Dime el día y la hora que prefieres (ej. "el jueves 4 PM"), o responde *SÍ* si te sirve la que te propuse.'); return; }
+  if (!slot) { await sendWhatsApp(formatPhoneForWhatsApp(clientPhone), t("nego_counter_fail", lang)); return; }
   await setStatus(supabase, neg.id, { status: "barber_deciding", proposed_start_utc: slot.startUtc, proposed_end_utc: slot.endUtc, rounds: (neg.rounds || 0) + 1 });
   if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), `El cliente prefiere el ${formatApptEs(slot.startUtc, tz)}. ¿Puedes? Responde *SÍ*, u ofrécele otra hora.`);
-  await sendWhatsApp(formatPhoneForWhatsApp(clientPhone), "Le pregunto al barbero y te confirmo. ⏳");
+  await sendWhatsApp(formatPhoneForWhatsApp(clientPhone), t("nego_asking_barber", lang));
 }
 
 export interface NegotiationCtx {

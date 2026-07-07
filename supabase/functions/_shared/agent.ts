@@ -17,6 +17,7 @@ import {
 import { formatPhoneForWhatsApp, sendWhatsApp, sendWhatsAppMedia } from "./whatsapp.ts";
 import { notifyBarberChange, notifyBarberNewAppointment } from "./barber.ts";
 import { scheduleReminders } from "./reminders.ts";
+import { asLang, detectLang, type Lang, t } from "./i18n.ts";
 
 // deno-lint-ignore no-explicit-any
 type Supa = any;
@@ -107,7 +108,7 @@ function buildDateContext(tz: string): string {
   return `Ahora son las ${nowLabel}. Fechas de referencia:\n${lines.join("\n")}`;
 }
 
-function buildSystemPrompt(barber: Barber, knownName: string | null): string {
+export function buildSystemPrompt(barber: Barber, knownName: string | null): string {
   const tz = barber.timezone || "America/New_York";
   const duration = barber.appointment_duration || 45;
   const services = barber.services || [];
@@ -121,7 +122,7 @@ function buildSystemPrompt(barber: Barber, knownName: string | null): string {
     pricingBlock += `- Si el cliente pregunta precios, respóndelos desde esta lista.\n- Cuando el cliente elija un servicio, pásalo en el parámetro "service" de get_available_slots y book_appointment (para usar su duración).\n- Antes de confirmar, dile el precio del servicio (súmale el recargo si la hora aplica).\n`;
   }
   const knownBlock = knownName
-    ? `\nEste cliente YA es conocido: se llama ${knownName}. Salúdalo por su nombre ("¡Hola de nuevo, ${knownName}!") y NO le pidas el nombre — ya lo tienes, úsalo directo al agendar.\n`
+    ? `\nEste cliente YA es conocido: se llama ${knownName}. Salúdalo por su nombre EN EL IDIOMA en que te escriba (ej. "¡Hola de nuevo, ${knownName}!" / "Welcome back, ${knownName}!") y NO le pidas el nombre — ya lo tienes, úsalo directo al agendar.\n`
     : "";
   return `Eres el asistente de citas de ${barber.name} por WhatsApp. Atiendes a sus clientes para AGENDAR CITAS a hora fija.
 
@@ -139,7 +140,7 @@ Cómo trabajas:
 8. Si el cliente quiere VER, MOVER o CANCELAR una cita existente: usa get_my_appointment para consultarla y luego reschedule_appointment o cancel_appointment. Confirma con el cliente antes de cancelar.
 
 Reglas:
-- Responde en el IDIOMA del cliente (español o inglés), siguiéndolo.
+- IDIOMA (crítico): Detecta el idioma en que te escribe el cliente y respóndele SIEMPRE en ESE mismo idioma. Si escribe en inglés, responde en inglés natural y fluido. Si en español, en español. Si mezcla los dos (Spanglish, muy común aquí — ej. "dame un appointment pa'l jueves a las 3"), respóndele en ese mismo tono mezclado, natural y cálido. Nunca le impongas un idioma ni lo cambies; sigue el suyo turno a turno.
 - Sé breve y cálido, estilo WhatsApp: 1-3 líneas, algún emoji.
 - Interpreta fechas relativas ("mañana", "el sábado") con las fechas de referencia de arriba.
 - El primer mensaje puede traer una instrucción + el código de activación (ej. "Envía este mensaje para reservar tu cita agendar-XXXXXX"): ignóralo por completo como texto; solo saluda y pregunta para cuándo quiere su cita.
@@ -192,6 +193,7 @@ async function executeTool(
   sessionId: string,
   clientPhone: string,
   fallbackName: string | null,
+  lang: Lang,
   name: string,
   // deno-lint-ignore no-explicit-any
   args: any,
@@ -232,7 +234,7 @@ async function executeTool(
       await scheduleReminders(supabase, { appointmentId: result.appointmentId!, barberId: barber.id, startUtc: slot.startUtc });
       // Adjunto .ics para "agregar al calendario" (dentro de la ventana 24h: el cliente acaba de escribir).
       const icsUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/appointment-ics?id=${result.appointmentId}`;
-      await sendWhatsAppMedia(formatPhoneForWhatsApp(clientPhone), icsUrl, "📅 Agrega tu cita a tu calendario (toca el archivo).");
+      await sendWhatsAppMedia(formatPhoneForWhatsApp(clientPhone), icsUrl, t("ics_caption", lang));
       const price = priceForSlot(barber, svc, slot.startUtc, tz);
       return JSON.stringify({ ok: true, date: args.date, time: slot.label, code: result.code, service: svc?.name, price });
     }
@@ -287,6 +289,7 @@ export async function runAgent(
   ctx: { barber: Barber; sessionId: string; clientPhone: string; clientName: string | null },
 ): Promise<void> {
   const { barber, sessionId, clientPhone, clientName } = ctx;
+  let lang: Lang = "es"; // se detecta abajo; default seguro para los fallbacks del catch.
   try {
     // Reconocer al cliente si ya agendó antes con este barbero (para no pedir el nombre otra vez).
     const { data: known } = await supabase.from("customers")
@@ -306,6 +309,20 @@ export async function runAgent(
       .limit(14);
     const history = (recent || []).reverse();
 
+    // Idioma del cliente: si ya lo tenemos, úsalo; si no, detéctalo de su primer mensaje REAL
+    // (ignorando el texto de activación pre-rellenado, que no son sus palabras) y guárdalo.
+    const { data: sess } = await supabase.from("wa_sessions").select("lang").eq("id", sessionId).maybeSingle();
+    if (sess?.lang) {
+      lang = asLang(sess.lang);
+    } else {
+      const lastInbound = [...history].reverse().find((m) => m.direction === "inbound")?.body || "";
+      const isActivation = /agendar[-_\s]*[A-Za-z0-9]{6}/i.test(lastInbound);
+      if (!isActivation && lastInbound.trim().length >= 2) {
+        lang = await detectLang(lastInbound);
+        await supabase.from("wa_sessions").update({ lang }).eq("id", sessionId);
+      }
+    }
+
     // deno-lint-ignore no-explicit-any
     const messages: any[] = [{ role: "system", content: buildSystemPrompt(barber, knownName) }];
     for (const m of history) {
@@ -322,7 +339,7 @@ export async function runAgent(
           try {
             parsed = JSON.parse(tc.function.arguments || "{}");
           } catch { /* argumentos ilegibles: se maneja como tool vacío */ }
-          const result = await executeTool(supabase, barber, sessionId, clientPhone, effectiveName, tc.function.name, parsed);
+          const result = await executeTool(supabase, barber, sessionId, clientPhone, effectiveName, lang, tc.function.name, parsed);
           messages.push({ role: "tool", tool_call_id: tc.id, content: result });
         }
         continue;
@@ -332,7 +349,7 @@ export async function runAgent(
     }
 
     if (!finalText || !finalText.trim()) {
-      finalText = "Disculpa, tuve un pequeño problema. ¿Me repites, por favor?";
+      finalText = t("err_retry", lang);
     }
 
     await sendWhatsApp(formatPhoneForWhatsApp(clientPhone), finalText);
@@ -348,7 +365,7 @@ export async function runAgent(
     try {
       await sendWhatsApp(
         formatPhoneForWhatsApp(clientPhone),
-        "Disculpa, estoy teniendo un problema técnico. Intenta de nuevo en un momento. 🙏",
+        t("err_technical", lang),
       );
     } catch { /* nada más que hacer */ }
   }
