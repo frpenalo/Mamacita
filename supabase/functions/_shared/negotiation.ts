@@ -28,7 +28,7 @@ const apptDurationMin = (a: { start_time: string; end_time: string }) =>
   Math.max(15, Math.round((new Date(a.end_time).getTime() - new Date(a.start_time).getTime()) / 60000));
 
 /** Interpreta fecha+hora de un texto libre con el LLM (relativos + contexto barbería). */
-async function extractDateTime(text: string, tz: string): Promise<{ date: string | null; time: string } | null> {
+export async function extractDateTime(text: string, tz: string): Promise<{ date: string | null; time: string } | null> {
   const key = Deno.env.get("OPENAI_API_KEY");
   if (!key) return null;
   const todayStr = formatInTimeZone(new Date(), tz, "yyyy-MM-dd");
@@ -61,7 +61,7 @@ async function extractDateTime(text: string, tz: string): Promise<{ date: string
 }
 
 /** Resuelve el hueco desde {date,time}. Sin día → busca el primer día disponible con esa hora. */
-async function resolveSlot(supabase: Supa, barber: Barber, tz: string, dt: { date: string | null; time: string }, durationMin: number) {
+export async function resolveSlot(supabase: Supa, barber: Barber, tz: string, dt: { date: string | null; time: string }, durationMin: number) {
   if (dt.date) return await findSlot(supabase, barber, dt.date, dt.time, durationMin);
   const todayStr = formatInTimeZone(new Date(), tz, "yyyy-MM-dd");
   const base = new Date(`${todayStr}T12:00:00Z`).getTime();
