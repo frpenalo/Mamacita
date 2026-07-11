@@ -5,6 +5,7 @@
 // Spec: planning/product/walk-in-queue-spec.md
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { screenCaller } from "../_shared/call-screening.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -167,6 +168,19 @@ Deno.serve(async (req) => {
       });
     }
 
+    // --- Pre-filtro anti-spam (capa 1): rechaza ANTES de contestar (ahorra la llamada a NXTUP y
+    // los minutos de VAPI). Si pasa, Julie hace la capa 2 (detectar el pitch por contenido). ---
+    const callerPhone =
+      body?.message?.call?.from || body?.message?.customer?.number || null;
+    const screen = await screenCaller(supabase, callerPhone);
+    if (screen.block) {
+      console.log(`[assistant-request] blocked caller=${callerPhone} reason=${screen.reason}`);
+      return new Response(
+        JSON.stringify({ error: "No podemos atender esta llamada en este momento. Gracias." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // Availability: NXTUP if linked, local otherwise. NXTUP failure falls back to local.
     let availability: Availability | null = null;
     if (shop.nxtup_shop_id && shop.nxtup_api_url && shop.nxtup_shared_secret) {
@@ -178,8 +192,6 @@ Deno.serve(async (req) => {
 
     // Telemetry: register the call (cost/duration/outcome filled in by other functions)
     const vapiCallId = body?.message?.call?.id;
-    const callerPhone =
-      body?.message?.call?.from || body?.message?.customer?.number || null;
     if (vapiCallId) {
       const { error: callErr } = await supabase.from("calls").insert({
         shop_id: shop.id,
