@@ -175,8 +175,13 @@ Deno.serve(async (req) => {
     const screen = await screenCaller(supabase, callerPhone);
     if (screen.block) {
       console.log(`[assistant-request] blocked caller=${callerPhone} reason=${screen.reason}`);
+      // El anónimo recibe un rechazo CON SALIDA (que vuelva a llamar mostrando su número);
+      // el resto, un rechazo neutro.
+      const error = screen.reason === "anonymous"
+        ? "Por tu seguridad no atendemos llamadas con número oculto. Por favor, vuelve a llamarnos mostrando tu número. For security, please call back with your number visible. ¡Gracias!"
+        : "No podemos atender esta llamada en este momento. Gracias.";
       return new Response(
-        JSON.stringify({ error: "No podemos atender esta llamada en este momento. Gracias." }),
+        JSON.stringify({ error }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }

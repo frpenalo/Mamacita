@@ -14,14 +14,15 @@ const RATE_MAX_CALLS = 5;   // máx. llamadas contestadas por número en la vent
 
 export interface Screen {
   block: boolean;
-  reason?: "blocklist" | "rate_limit";
+  reason?: "blocklist" | "rate_limit" | "anonymous";
 }
 
 export async function screenCaller(supabase: Supa, callerPhone: string | null): Promise<Screen> {
-  // Anónimo/oculto: no se bloquea por número (perderíamos clientes reales) → gate de contenido.
-  if (!callerPhone) return { block: false };
-  const norm = callerPhone.replace(/\D/g, "");
-  if (!norm) return { block: false };
+  const norm = (callerPhone || "").replace(/\D/g, "");
+  // Sin número, oculto/withheld, o número no válido (muy corto) → anónimo. Se bloquea con un
+  // mensaje que le dice al cliente real que vuelva a llamar mostrando su número (decisión de
+  // negocio: ~9 de 10 anónimos son spam; el rechazo recuperable no pierde al 1 real).
+  if (norm.length < 7) return { block: true, reason: "anonymous" };
 
   try {
     // 1. Blocklist (número exacto o prefijo). Tabla chica → se evalúa en memoria.
