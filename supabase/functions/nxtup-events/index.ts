@@ -53,9 +53,11 @@ Deno.serve(async (req) => {
     }
 
     const payload = JSON.parse(rawBody);
-    const { event, external_id, shop_id: nxtupShopId } = payload;
-    if (!event || !external_id || !nxtupShopId) {
-      return new Response(JSON.stringify({ error: "Missing event, external_id or shop_id" }), {
+    const { event, external_id } = payload;
+    // shop_profile_updated usa `nxtup_shop_id`; los eventos de cola usan `shop_id`. Aceptamos ambos.
+    const nxtupShopId = payload.nxtup_shop_id ?? payload.shop_id;
+    if (!event || !nxtupShopId) {
+      return new Response(JSON.stringify({ error: "Missing event or shop id" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -86,6 +88,31 @@ Deno.serve(async (req) => {
       console.log(`[nxtup-events] bad signature for shop ${shop.id}`);
       return new Response(JSON.stringify({ error: "Invalid signature" }), {
         status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // --- shop_profile_updated: el dueño editó servicios/precios en NXTUP → poblar services_text.
+    // No es un evento de cola (sin external_id ni queue_entry); se maneja aquí y retorna. ---
+    if (event === "shop_profile_updated") {
+      // deno-lint-ignore no-explicit-any
+      const services: any[] = Array.isArray(payload.services) ? payload.services : [];
+      const servicesText = services
+        .filter((s) => s && s.name && s.price != null) // omitir los sin precio (no se citan)
+        .map((s) => `${s.name} $${s.price}`)
+        .join(", ");
+      await supabase.from("shops").update({ services_text: servicesText }).eq("id", shop.id);
+      console.log(`[nxtup-events] shop_profile_updated shop=${shop.id} services_text="${servicesText}"`);
+      return new Response(JSON.stringify({ ok: true, services_text: servicesText }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // --- Eventos de cola: requieren external_id ---
+    if (!external_id) {
+      return new Response(JSON.stringify({ error: "Missing external_id" }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
