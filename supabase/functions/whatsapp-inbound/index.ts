@@ -17,6 +17,7 @@ import { runAgent } from "../_shared/agent.ts";
 import { checkNegotiation, handleNegotiationTurn } from "../_shared/negotiation.ts";
 import { findBarberByPhone, handleBarberCommand } from "../_shared/barber.ts";
 import { firstAudioMedia, transcribeAudio } from "../_shared/transcribe.ts";
+import { isRateLimited } from "../_shared/security.ts";
 import type { Barber } from "../_shared/appointments.ts";
 
 const corsHeaders = {
@@ -67,6 +68,10 @@ function emptyTwiml(): Response {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  if (await isRateLimited(req, "whatsapp-inbound")) {
+    return new Response("Too many requests", { status: 429, headers: corsHeaders });
+  }
 
   try {
     const rawBody = await req.text();

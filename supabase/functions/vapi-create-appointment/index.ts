@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isRateLimited, secretsMatch } from "../_shared/security.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -149,6 +150,12 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  if (await isRateLimited(req, "vapi-create-appointment")) {
+    return new Response(JSON.stringify({ error: "Too many requests" }), {
+      status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   let vapiSecret = req.headers.get("x-vapi-secret");
   const expected = Deno.env.get("VAPI_WEBHOOK_SECRET");
   // Strip "Bearer " prefix if present
@@ -156,7 +163,7 @@ Deno.serve(async (req) => {
     vapiSecret = vapiSecret.substring(7);
   }
   // Fail-closed: reject if secret not configured OR doesn't match
-  if (!expected || !vapiSecret || vapiSecret.trim() !== expected.trim()) {
+  if (!secretsMatch(vapiSecret?.trim(), expected?.trim())) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { 
       status: 401, 
       headers: { ...corsHeaders, "Content-Type": "application/json" } 

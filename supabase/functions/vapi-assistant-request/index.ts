@@ -6,6 +6,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { screenCaller } from "../_shared/call-screening.ts";
+import { isRateLimited, secretsMatch } from "../_shared/security.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -108,6 +109,12 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  if (await isRateLimited(req, "vapi-assistant-request")) {
+    return new Response(JSON.stringify({ error: "Too many requests" }), {
+      status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   // Accept the secret from either header: VAPI's "Bearer Token" credential
   // sends Authorization: Bearer <token>; a custom-header credential sends
   // x-vapi-secret. Read whichever is present, then strip the Bearer prefix.
@@ -117,7 +124,7 @@ Deno.serve(async (req) => {
     vapiSecret = vapiSecret.substring(7);
   }
   // Fail-closed: reject if secret not configured OR doesn't match
-  if (!expected || !vapiSecret || vapiSecret.trim() !== expected.trim()) {
+  if (!secretsMatch(vapiSecret?.trim(), expected?.trim())) {
     console.log("[vapi-assistant-request] Auth failed - returning 401");
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,

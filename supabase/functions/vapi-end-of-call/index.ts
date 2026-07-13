@@ -5,6 +5,7 @@
 //   2. Legacy: releases held availability_slots (Fase 2 appointments flow)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isRateLimited, secretsMatch } from "../_shared/security.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,6 +18,12 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  if (await isRateLimited(req, "vapi-end-of-call")) {
+    return new Response(JSON.stringify({ error: "Too many requests" }), {
+      status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   // Accept the secret from either header: VAPI's "Bearer Token" credential
   // sends Authorization: Bearer <token>; a custom-header credential sends
   // x-vapi-secret. Read whichever is present, then strip the Bearer prefix.
@@ -25,7 +32,7 @@ Deno.serve(async (req) => {
   if (vapiSecret?.startsWith("Bearer ")) {
     vapiSecret = vapiSecret.substring(7);
   }
-  if (!expected || !vapiSecret || vapiSecret.trim() !== expected.trim()) {
+  if (!secretsMatch(vapiSecret?.trim(), expected?.trim())) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

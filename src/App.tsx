@@ -14,7 +14,14 @@ import Settings from "./pages/Settings";
 import Referrals from "./pages/Referrals";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000, // 60s: evita refetch agresivo en cada mount/focus (menos lecturas a Supabase)
+      refetchOnWindowFocus: false, // el dashboard no necesita refrescar al volver a la pestaña
+    },
+  },
+});
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
