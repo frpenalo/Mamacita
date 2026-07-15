@@ -5,6 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isRateLimited, secretsMatch } from "../_shared/security.ts";
+import { isShopOpen } from "../_shared/shop-hours.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -111,6 +112,18 @@ Deno.serve(async (req) => {
       .eq("id", shop_id)
       .maybeSingle();
     if (shopErr || !shop) throw new Error(`Shop not found: ${shop_id}`);
+
+    // Guard DURO: no anotar si la barbería está CERRADA (respeta el horario aunque un
+    // barbero se haya quedado "available" en NXTUP). No se crea entrada; Julie lo relaya.
+    if (!isShopOpen(shop.hours, shop.timezone || "America/New_York")) {
+      const toolCallId = body?.message?.toolCallList?.[0]?.id;
+      return new Response(
+        JSON.stringify({
+          results: [{ toolCallId, result: "La barbería está cerrada en este momento, no puedo anotarte en la lista. Vuelve dentro del horario, por favor." }],
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const vapiCallId = body?.message?.call?.id || null;
 

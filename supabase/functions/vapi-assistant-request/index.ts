@@ -7,6 +7,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { screenCaller } from "../_shared/call-screening.ts";
 import { isRateLimited, secretsMatch } from "../_shared/security.ts";
+import { hoursForSpeech, isShopOpen } from "../_shared/shop-hours.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -216,17 +217,22 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ¿Abierto AHORA? Se calcula del horario estructurado + la hora actual en la tz del shop.
+    const shopOpen = isShopOpen(shop.hours, shop.timezone || "America/New_York");
     const variableValues = {
       shop_id: shop.id,
       shop_name: shop.name,
       caller_phone: callerPhone || "", // the number the caller is dialing from — Julie uses this so she never has to ask
       address: shop.address || "",
       services_text: shop.services_text || "",
-      hours: shop.hours_text || "",
-      professionals_available: availability?.professionals_available ?? 0,
+      hours: hoursForSpeech(shop.hours) || shop.hours_text || "", // horas habladas desde la estructura
+      shop_open: shopOpen ? "yes" : "no",
+      professionals_available: shopOpen ? (availability?.professionals_available ?? 0) : 0,
       queue_count: (availability?.queue_waiting ?? 0) + (availability?.queue_arrived ?? 0),
       estimated_wait_minutes: availability?.estimated_wait_minutes ?? "",
-      availability_message: buildAvailabilityMessage(availability),
+      availability_message: shopOpen
+        ? buildAvailabilityMessage(availability)
+        : "En este momento la barbería está cerrada.",
     };
 
     console.log(`[assistant-request] shop=${shop.name} av=${JSON.stringify(availability)}`);
