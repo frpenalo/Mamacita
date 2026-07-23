@@ -2,7 +2,7 @@
 // hours = { mon:{open:"08:30",close:"21:00"}, ..., sun:{...} } — día ausente/null = cerrado.
 // Sirve para (a) respetar el horario (¿abierto AHORA?) y (b) decirlo (formateo a lenguaje natural).
 
-import { formatInTimeZone } from "https://esm.sh/date-fns-tz@3.2.0";
+import { formatInTimeZone, fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
 
 export interface DayHours { open: string; close: string } // "HH:mm" 24h, zero-padded
 export type WeekHours = Record<string, DayHours | null>;
@@ -21,6 +21,28 @@ export function isShopOpen(hours: WeekHours | null | undefined, timezone: string
   const dh = hours[dayKey];
   if (!dh || !dh.open || !dh.close) return false; // cerrado ese día
   return hhmm >= dh.open && hhmm < dh.close;      // "HH:mm" zero-padded → compara bien como string
+}
+
+/**
+ * Convierte una HORA de reloj (ej. "17:30", "5:30 PM") en la zona del shop a un timestamp UTC
+ * (la próxima vez HOY a esa hora). Devuelve null si no parsea o si la hora ya pasó (no confiable).
+ * Lo usa el ETA de voz: Julie manda la hora tal cual y el SERVIDOR hace la cuenta (no la IA).
+ */
+export function clockToUtc(timeStr: string, tz: string, now?: Date): string | null {
+  const m = String(timeStr).trim().match(/(\d{1,2}):(\d{2})\s*(a\.?m\.?|p\.?m\.?)?/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const ap = (m[3] || "").toLowerCase().replace(/\./g, "");
+  if (ap === "pm" && h < 12) h += 12;
+  if (ap === "am" && h === 12) h = 0;
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+  const nowD = now ?? new Date();
+  const today = formatInTimeZone(nowD, tz, "yyyy-MM-dd");
+  const iso = `${today}T${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}:00`;
+  const utc = fromZonedTime(iso, tz);
+  if (utc.getTime() < nowD.getTime() - 60000) return null; // hora ya pasó → no confiable
+  return utc.toISOString();
 }
 
 function to12(hhmm: string): string {

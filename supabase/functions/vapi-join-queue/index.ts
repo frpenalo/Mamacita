@@ -5,7 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isRateLimited, secretsMatch } from "../_shared/security.ts";
-import { isShopOpen } from "../_shared/shop-hours.ts";
+import { clockToUtc, isShopOpen } from "../_shared/shop-hours.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -211,10 +211,15 @@ Deno.serve(async (req) => {
     // que dijo el cliente), usamos ESO — es lo que el barbero ve al lado del nombre para decidir
     // si lo espera. Si no la dio, caemos al estimado por la cola (floor de 10 min para el timestamp).
     const etaMinutes = Number(args.eta_minutes);
-    let etaAt: string;
-    if (Number.isFinite(etaMinutes) && etaMinutes > 0 && etaMinutes <= 240) {
+    let etaAt: string | null = null;
+    if (Number.isFinite(etaMinutes) && etaMinutes > 0 && etaMinutes <= 300) {
       etaAt = new Date(Date.now() + etaMinutes * 60000).toISOString();
-    } else {
+    } else if (args.eta_time) {
+      // Hora de reloj (ej. "17:30"): el SERVIDOR la convierte a timestamp — Julie NO resta la
+      // hora actual (los modelos fallan en esa cuenta; ver caso "cinco y media" → salía +15).
+      etaAt = clockToUtc(String(args.eta_time), shop.timezone || "America/New_York");
+    }
+    if (!etaAt) {
       const { data: avData } = await supabase.rpc("shop_availability", { p_shop_id: shop_id });
       const waitMin = avData?.[0]?.estimated_wait_minutes ?? 0;
       etaAt = new Date(Date.now() + Math.max(waitMin, 10) * 60000).toISOString();
