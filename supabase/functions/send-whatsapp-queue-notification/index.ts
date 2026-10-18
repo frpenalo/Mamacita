@@ -49,6 +49,79 @@ const corsHeaders = {
 //
 //    Este mensaje fue generado automáticamente por MamaCita."
 
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { formatPhoneE164, sendSMS } from "../_shared/sms.ts";
+
+// SMS de fallback (texto plano, sin emojis ni tildes para no partir el mensaje en varios
+// segmentos). Solo se envía si el WhatsApp del cliente no entrega. Incluye el "Responde
+// STOP" que exige el A2P; HELP/STOP los maneja Twilio (Advanced Opt-Out).
+function smsBodyForCustomer(
+  type: string,
+  p: { customer_name?: string; shop_name?: string; address?: string; language?: string },
+): string | null {
+  const name = p.customer_name || "";
+  const shop = p.shop_name || (p.language === "en" ? "the shop" : "el shop");
+  const isEn = p.language === "en";
+  if (type === "queue_joined") {
+    const addr = p.address ? (isEn ? ` Address: ${p.address}.` : ` Direccion: ${p.address}.`) : "";
+    return isEn
+      ? `Hi ${name}, you're on the list at ${shop}.${addr} When you arrive, check in at the tablet by the entrance. Reply STOP to cancel.`
+      : `Hola ${name}, ya estas en la lista de ${shop}.${addr} Al llegar, registrate en la tablet de la entrada. Responde STOP para cancelar.`;
+  }
+  if (type === "turn_approaching") {
+    return isEn
+      ? `${name}, you're almost up at ${shop}. Head over so you don't miss your turn. Reply STOP to cancel.`
+      : `${name}, ya casi te toca en ${shop}. Ve acercandote para no perder tu turno. Responde STOP para cancelar.`;
+  }
+  return null;
+}
+
+// Registra el WhatsApp enviado al cliente (keyed por SID) con el SMS a usar si falla.
+// Si el WhatsApp ni siquiera obtuvo SID (fallo síncrono), cae a SMS de una vez (ese
+// fallo no genera StatusCallback, así que no habría otra oportunidad).
+async function recordOrFallback(
+  messageType: string,
+  customerPhone: string,
+  smsBody: string | null,
+  waResult: { success: boolean; sid?: string },
+): Promise<void> {
+  const toE164 = formatPhoneE164(customerPhone);
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+  if (waResult.success && waResult.sid) {
+    await supabase.from("message_deliveries").insert({
+      provider_sid: waResult.sid,
+      to_phone: toE164,
+      channel: "whatsapp",
+      message_type: messageType,
+      sms_body: smsBody,
+      status: "sent",
+    });
+    return;
+  }
+  // Fallo síncrono del WhatsApp → no llegará StatusCallback. SMS inline (best effort).
+  if (smsBody) {
+    const smsSid = await sendSMS(toE164, smsBody);
+    console.log(`[wa-queue] WhatsApp sync-failed, SMS fallback sid=${smsSid} to ${toE164}`);
+    await supabase.from("message_deliveries").insert({
+      provider_sid: smsSid,
+      to_phone: toE164,
+      channel: "sms",
+      message_type: messageType,
+      sms_body: smsBody,
+      status: smsSid ? "sent" : "failed",
+      fallback_sid: smsSid,
+    });
+  }
+}
+
+// URL donde Twilio reporta el estado de entrega del WhatsApp (dispara el fallback a SMS).
+function statusCallbackUrl(): string {
+  return `${Deno.env.get("SUPABASE_URL")}/functions/v1/twilio-message-status`;
+}
+
 function formatPhoneForWhatsApp(phone: string): string {
   let cleaned = phone.replace(/[^0-9+]/g, "");
   if (!cleaned.startsWith("+")) {
@@ -62,7 +135,8 @@ function formatPhoneForWhatsApp(phone: string): string {
 async function sendTemplate(
   to: string,
   contentSid: string,
-  contentVariables: Record<string, string>
+  contentVariables: Record<string, string>,
+  statusCallback?: string
 ): Promise<{ success: boolean; sid?: string; error?: string }> {
   const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID")!;
   const authToken = Deno.env.get("TWILIO_AUTH_TOKEN")!;
@@ -75,6 +149,7 @@ async function sendTemplate(
   params.append("To", to);
   params.append("ContentSid", contentSid);
   params.append("ContentVariables", JSON.stringify(contentVariables));
+  if (statusCallback) params.append("StatusCallback", statusCallback);
 
   const res = await fetch(url, {
     method: "POST",
@@ -93,7 +168,11 @@ async function sendTemplate(
   return { success: false, error: data.message || "Unknown error" };
 }
 
-async function sendFreeform(to: string, bodyText: string): Promise<{ success: boolean; error?: string }> {
+async function sendFreeform(
+  to: string,
+  bodyText: string,
+  statusCallback?: string
+): Promise<{ success: boolean; sid?: string; error?: string }> {
   const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID")!;
   const authToken = Deno.env.get("TWILIO_AUTH_TOKEN")!;
   const from = Deno.env.get("TWILIO_WHATSAPP_FROM")!;
@@ -104,6 +183,7 @@ async function sendFreeform(to: string, bodyText: string): Promise<{ success: bo
   params.append("From", from);
   params.append("To", to);
   params.append("Body", bodyText);
+  if (statusCallback) params.append("StatusCallback", statusCallback);
 
   const res = await fetch(url, {
     method: "POST",
@@ -114,7 +194,7 @@ async function sendFreeform(to: string, bodyText: string): Promise<{ success: bo
     body: params.toString(),
   });
   const data = await res.json();
-  if (res.ok) return { success: true };
+  if (res.ok) return { success: true, sid: data.sid };
   console.error(`[wa-queue] freeform failed to ${to}:`, data);
   return { success: false, error: data.message };
 }
@@ -151,6 +231,7 @@ Deno.serve(async (req) => {
       const tplSid = isEn
         ? Deno.env.get("TWILIO_TPL_QUEUE_JOINED_EN")
         : Deno.env.get("TWILIO_TPL_QUEUE_JOINED");
+      const cb = statusCallbackUrl();
       let result;
       if (tplSid) {
         result = await sendTemplate(to, tplSid, {
@@ -158,16 +239,18 @@ Deno.serve(async (req) => {
           "2": shop_name || "el shop",
           "3": address || "",
           "4": encodeURIComponent(address || ""),
-        });
+        }, cb);
       } else {
         console.warn("[wa-queue] queue_joined template not set — trying freeform (24h-session only)");
         result = await sendFreeform(
           to,
           isEn
             ? `Hi ${customer_name} 👋 You're on the list at ${shop_name}.\n📍 ${address}\nhttps://maps.google.com/?q=${encodeURIComponent(address || "")}\nWhen you arrive, check in at the tablet by the entrance. See you soon!`
-            : `Hola ${customer_name} 👋 Ya estás en la lista de ${shop_name}.\n📍 ${address}\nhttps://maps.google.com/?q=${encodeURIComponent(address || "")}\nCuando llegues, regístrate en la tablet de la entrada. ¡Te esperamos!`
+            : `Hola ${customer_name} 👋 Ya estás en la lista de ${shop_name}.\n📍 ${address}\nhttps://maps.google.com/?q=${encodeURIComponent(address || "")}\nCuando llegues, regístrate en la tablet de la entrada. ¡Te esperamos!`,
+          cb
         );
       }
+      await recordOrFallback("queue_joined", customer_phone, smsBodyForCustomer("queue_joined", { customer_name, shop_name, address, language }), result);
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -187,21 +270,24 @@ Deno.serve(async (req) => {
       const tplSid = isEn
         ? Deno.env.get("TWILIO_TPL_TURN_APPROACHING_EN")
         : Deno.env.get("TWILIO_TPL_TURN_APPROACHING");
+      const cb = statusCallbackUrl();
       let result;
       if (tplSid) {
         result = await sendTemplate(to, tplSid, {
           "1": customer_name || "",
           "2": shop_name || "el shop",
-        });
+        }, cb);
       } else {
         console.warn("[wa-queue] turn_approaching template not set — trying freeform (24h-session only)");
         result = await sendFreeform(
           to,
           isEn
             ? `${customer_name}, you're almost up at ${shop_name}! ⏰ Head over so you don't miss your turn.`
-            : `${customer_name}, ¡ya casi te toca en ${shop_name}! ⏰ Ve acercándote para no perder tu turno.`
+            : `${customer_name}, ¡ya casi te toca en ${shop_name}! ⏰ Ve acercándote para no perder tu turno.`,
+          cb
         );
       }
+      await recordOrFallback("turn_approaching", customer_phone, smsBodyForCustomer("turn_approaching", { customer_name, shop_name, language }), result);
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

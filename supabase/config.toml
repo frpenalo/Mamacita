@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.mamacita-number-request]
 verify_jwt = false
+
+[functions.twilio-message-status]
+verify_jwt = false
