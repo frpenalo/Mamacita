@@ -1,14 +1,20 @@
 // mamacita-number-request — NXTUP pide provisionar el número elegido por el dueño.
-// Request (POST firmado): { shop_id, choice: 'buy'|'port', requested_number?, current_number?, owner_name }
-// Response 200 (buy), uno de:
-//   { status: 'completed', number }                         comprado + importado a VAPI + asociado al shop
+// Request (POST firmado): { shop_id, choice: 'buy'|'forward'|'port', requested_number?, current_number?, owner_name }
+//   'buy'     = compra un número nuevo que el dueño ANUNCIA (lo da a sus clientes).
+//   'forward' = compra un número nuevo (invisible) y el dueño DESVÍA su número de siempre hacia él.
+//               `current_number` = el número público del dueño (origen del desvío).
+//   'port'    = fase 2 (deshabilitado).
+// Response 200, uno de:
+//   { status: 'completed', number, setup: 'bought' }                         (buy)
+//   { status: 'completed', number, setup: 'forward', forward_to, instructions } (forward: guía de desvío)
 //   { status: 'failed', fail_reason: 'number_taken', numbers:[alt] }  se vendió en la ventana → alternativas
 //   { status: 'failed', fail_reason: 'provisioning_error' }  falló la compra o el import a VAPI
-// El PORTE es fase 2 (NXTUP lo tiene deshabilitado); si llega, responde failed port_not_available.
+//   { status: 'failed', fail_reason: 'port_not_available' }  porte = fase 2
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { authNxtup } from "../_shared/nxtup-auth.ts";
 import { areaCodeOf, searchAvailable } from "../_shared/twilio-numbers.ts";
+import { forwardingInstructions } from "../_shared/forwarding.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,7 +43,10 @@ Deno.serve(async (req) => {
   if (payload.choice === "port") {
     return json({ status: "failed", fail_reason: "port_not_available" });
   }
-  if (payload.choice !== "buy") return json({ error: "Unknown choice" }, 400);
+  // 'buy' (anuncia el número nuevo) y 'forward' (desvía su número viejo) provisionan igual;
+  // solo difieren en metadata + la guía de desvío que devolvemos.
+  const isForward = payload.choice === "forward";
+  if (payload.choice !== "buy" && !isForward) return json({ error: "Unknown choice" }, 400);
 
   const requested = String(payload.requested_number || "").trim();
   if (!requested) return json({ error: "Missing requested_number" }, 400);
@@ -86,14 +95,33 @@ Deno.serve(async (req) => {
   const vapiData = await vapiRes.json();
 
   // 3. Asociar el número al shop (por donde entra Julie).
-  const { error: upErr } = await supabase
-    .from("shops")
-    .update({ phone_number: number, vapi_phone_number_id: vapiData.id })
-    .eq("id", shop.id);
+  // deno-lint-ignore no-explicit-any
+  const shopUpdate: Record<string, any> = {
+    phone_number: number,
+    vapi_phone_number_id: vapiData.id,
+    number_setup: isForward ? "forward" : "bought",
+  };
+  if (isForward) {
+    // El número público del dueño (origen del desvío). Lo guardamos para mostrarlo y para el
+    // chequeo de caller-ID al verificar (que el operador no reemplace el número del cliente).
+    const pub = String(payload.current_number || "").trim();
+    if (pub) shopUpdate.public_phone_number = pub;
+    shopUpdate.forward_verified = false;
+  }
+  const { error: upErr } = await supabase.from("shops").update(shopUpdate).eq("id", shop.id);
   if (upErr) {
     console.error("[number-request] shop update failed:", upErr);
     return json({ status: "failed", fail_reason: "provisioning_error" });
   }
 
-  return json({ status: "completed", number });
+  if (isForward) {
+    return json({
+      status: "completed",
+      number,
+      setup: "forward",
+      forward_to: number,
+      instructions: forwardingInstructions(number),
+    });
+  }
+  return json({ status: "completed", number, setup: "bought" });
 });
