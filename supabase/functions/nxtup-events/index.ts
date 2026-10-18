@@ -95,15 +95,24 @@ Deno.serve(async (req) => {
     // --- shop_profile_updated: el dueño editó servicios/precios en NXTUP → poblar services_text.
     // No es un evento de cola (sin external_id ni queue_entry); se maneja aquí y retorna. ---
     if (event === "shop_profile_updated") {
+      // Campos independientes (regla simétrica: AUSENTE = sin cambio, no pisa lo otro).
+      // El aviso de servicios trae `services` sin `julie_enabled`; el de billing al revés.
       // deno-lint-ignore no-explicit-any
-      const services: any[] = Array.isArray(payload.services) ? payload.services : [];
-      const servicesText = services
-        .filter((s) => s && s.name && s.price != null) // omitir los sin precio (no se citan)
-        .map((s) => `${s.name} $${s.price}`)
-        .join(", ");
-      await supabase.from("shops").update({ services_text: servicesText }).eq("id", shop.id);
-      console.log(`[nxtup-events] shop_profile_updated shop=${shop.id} services_text="${servicesText}"`);
-      return new Response(JSON.stringify({ ok: true, services_text: servicesText }), {
+      const update: Record<string, any> = {};
+      if (Array.isArray(payload.services)) {
+        update.services_text = payload.services
+          .filter((s: any) => s && s.name && s.price != null) // omitir los sin precio (no se citan)
+          .map((s: any) => `${s.name} $${s.price}`)
+          .join(", ");
+      }
+      if (typeof payload.julie_enabled === "boolean") {
+        update.julie_enabled = payload.julie_enabled; // true = pagó/activa; false = apagada (idempotente)
+      }
+      if (Object.keys(update).length > 0) {
+        await supabase.from("shops").update(update).eq("id", shop.id);
+      }
+      console.log(`[nxtup-events] shop_profile_updated shop=${shop.id} ${JSON.stringify(update)}`);
+      return new Response(JSON.stringify({ ok: true, updated: update }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

@@ -175,6 +175,17 @@ Deno.serve(async (req) => {
       });
     }
 
+    // --- Gate de billing (add-on Julie): si NXTUP apagó Julie para este shop (false EXPLÍCITO),
+    // no contestamos. null/true = contesta — los pilotos sin señal de NXTUP (ej. Fade Factory)
+    // nunca reciben el flag, así que siguen activos. ---
+    if (shop.julie_enabled === false) {
+      console.log(`[assistant-request] julie disabled (billing) shop=${shop.id}`);
+      return new Response(
+        JSON.stringify({ error: "El asistente de voz no está activo para este negocio en este momento." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // --- Pre-filtro anti-spam (capa 1): rechaza ANTES de contestar (ahorra la llamada a NXTUP y
     // los minutos de VAPI). Si pasa, Julie hace la capa 2 (detectar el pitch por contenido). ---
     const callerPhone =
