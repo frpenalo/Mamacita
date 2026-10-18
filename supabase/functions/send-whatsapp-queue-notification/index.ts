@@ -66,7 +66,7 @@ async function sendTemplate(
 ): Promise<{ success: boolean; sid?: string; error?: string }> {
   const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID")!;
   const authToken = Deno.env.get("TWILIO_AUTH_TOKEN")!;
-  const from = Deno.env.get("TWILIO_WHATSAPP_FROM") || "whatsapp:+19844009792";
+  const from = Deno.env.get("TWILIO_WHATSAPP_FROM")!;
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
   const auth = btoa(`${accountSid}:${authToken}`);
@@ -96,7 +96,7 @@ async function sendTemplate(
 async function sendFreeform(to: string, bodyText: string): Promise<{ success: boolean; error?: string }> {
   const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID")!;
   const authToken = Deno.env.get("TWILIO_AUTH_TOKEN")!;
-  const from = Deno.env.get("TWILIO_WHATSAPP_FROM") || "whatsapp:+19844009792";
+  const from = Deno.env.get("TWILIO_WHATSAPP_FROM")!;
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
   const auth = btoa(`${accountSid}:${authToken}`);
