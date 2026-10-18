@@ -68,51 +68,87 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Resolve the shop by its NXTUP id to get the shared secret
+    // Resolve the shop by its NXTUP id. Puede NO existir todavía (alta vía shop_profile_updated).
     const { data: shop } = await supabase
       .from("shops")
-      .select("id, name, nxtup_shared_secret")
+      .select("*")
       .eq("nxtup_shop_id", nxtupShopId)
       .maybeSingle();
 
-    if (!shop || !shop.nxtup_shared_secret) {
-      return new Response(JSON.stringify({ error: "Unknown shop" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Secret para verificar la firma. El secret del canal es GLOBAL (igual en todos los shops):
+    // para el ALTA (el shop aún no existe) lo tomamos de cualquier shop ya registrado.
+    let sharedSecret: string | null = shop?.nxtup_shared_secret ?? null;
+    let globalApiUrl: string | null = null;
+    if (!sharedSecret) {
+      if (event !== "shop_profile_updated") {
+        // Los eventos de cola requieren un shop existente.
+        return new Response(JSON.stringify({ error: "Unknown shop" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: anyShop } = await supabase
+        .from("shops").select("nxtup_shared_secret, nxtup_api_url")
+        .not("nxtup_shared_secret", "is", null).limit(1).maybeSingle();
+      sharedSecret = anyShop?.nxtup_shared_secret ?? null;
+      globalApiUrl = anyShop?.nxtup_api_url ?? null;
+    }
+    if (!sharedSecret) {
+      return new Response(JSON.stringify({ error: "No shared secret configured" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Verify HMAC (fail-closed)
-    const expectedSig = await hmacHex(shop.nxtup_shared_secret, `${timestamp}.${rawBody}`);
+    const expectedSig = await hmacHex(sharedSecret, `${timestamp}.${rawBody}`);
     if (!signature || !timingSafeEqual(signature, expectedSig)) {
-      console.log(`[nxtup-events] bad signature for shop ${shop.id}`);
+      console.log(`[nxtup-events] bad signature for nxtup_shop_id=${nxtupShopId}`);
       return new Response(JSON.stringify({ error: "Invalid signature" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // --- shop_profile_updated: el dueño editó servicios/precios en NXTUP → poblar services_text.
     // No es un evento de cola (sin external_id ni queue_entry); se maneja aquí y retorna. ---
+    // --- shop_profile_updated: ALTA (crea el shop) o SYNC del perfil. Campos independientes
+    // (regla simétrica: AUSENTE = sin cambio, no pisa lo otro). ---
     if (event === "shop_profile_updated") {
-      // Campos independientes (regla simétrica: AUSENTE = sin cambio, no pisa lo otro).
-      // El aviso de servicios trae `services` sin `julie_enabled`; el de billing al revés.
       // deno-lint-ignore no-explicit-any
       const update: Record<string, any> = {};
+      if (typeof payload.name === "string" && payload.name.trim()) update.name = payload.name.trim();
+      if (typeof payload.address === "string") update.address = payload.address;
+      if (typeof payload.timezone === "string" && payload.timezone.trim()) update.timezone = payload.timezone.trim();
+      if (payload.hours && typeof payload.hours === "object") update.hours = payload.hours;
+      // owner_whatsapp de NXTUP → whatsapp_number de Mamacita (donde el dueño recibe los avisos).
+      if (typeof payload.owner_whatsapp === "string") update.whatsapp_number = payload.owner_whatsapp;
       if (Array.isArray(payload.services)) {
         update.services_text = payload.services
           .filter((s: any) => s && s.name && s.price != null) // omitir los sin precio (no se citan)
           .map((s: any) => `${s.name} $${s.price}`)
           .join(", ");
       }
-      if (typeof payload.julie_enabled === "boolean") {
-        update.julie_enabled = payload.julie_enabled; // true = pagó/activa; false = apagada (idempotente)
+      if (typeof payload.julie_enabled === "boolean") update.julie_enabled = payload.julie_enabled;
+
+      if (shop) {
+        // SYNC: el shop ya existe → actualizar solo los campos presentes.
+        if (Object.keys(update).length > 0) {
+          await supabase.from("shops").update(update).eq("id", shop.id);
+        }
+      } else {
+        // ALTA: crear el shop. name obligatorio en el primer evento; secret/api_url global al nuevo shop.
+        if (!update.name) {
+          return new Response(JSON.stringify({ error: "Alta (first shop_profile_updated) must include name" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        await supabase.from("shops").insert({
+          nxtup_shop_id: nxtupShopId,
+          nxtup_shared_secret: sharedSecret,
+          nxtup_api_url: globalApiUrl,
+          ...update,
+        });
       }
-      if (Object.keys(update).length > 0) {
-        await supabase.from("shops").update(update).eq("id", shop.id);
-      }
-      console.log(`[nxtup-events] shop_profile_updated shop=${shop.id} ${JSON.stringify(update)}`);
-      return new Response(JSON.stringify({ ok: true, updated: update }), {
+      console.log(`[nxtup-events] shop_profile_updated nxtup_shop_id=${nxtupShopId} created=${!shop} ${JSON.stringify(update)}`);
+      return new Response(JSON.stringify({ ok: true, created: !shop, updated: update }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
