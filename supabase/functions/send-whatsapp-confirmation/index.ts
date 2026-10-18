@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
         authToken,
         fromNumber,
         formatPhoneForWhatsApp(barber_phone),
-        "HXbf9b535ab2519063b8b3a2f0e99f8580",
+        "HXd37a420211782f5c4fac09b0c677f2a6",
         {
           "1": customer_name,
           "2": customer_phone,
