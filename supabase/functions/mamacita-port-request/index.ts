@@ -39,6 +39,12 @@ Deno.serve(async (req) => {
   const token = randomToken();
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 días
 
+  // Reintento limpio: cancelar cualquier request 'collecting' viejo de este shop (mata su
+  // enlace) para que solo haya UN enlace activo a la vez.
+  await supabase.from("number_port_requests")
+    .update({ status: "cancelled", port_token: null, port_token_expires_at: null, updated_at: new Date().toISOString() })
+    .eq("shop_id", shop.id).eq("status", "collecting");
+
   // Solo lo NO sensible desde NXTUP. La cuenta/PIN/dirección/factura/LOA entran por el enlace.
   const { data, error } = await supabase
     .from("number_port_requests")
