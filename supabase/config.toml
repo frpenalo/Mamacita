@@ -56,3 +56,9 @@ verify_jwt = false
 
 [functions.mamacita-number-verify]
 verify_jwt = false
+
+[functions.mamacita-port-request]
+verify_jwt = false
+
+[functions.mamacita-port-status]
+verify_jwt = false
