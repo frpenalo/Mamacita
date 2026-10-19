@@ -1,13 +1,11 @@
-// mamacita-port-request — NXTUP envía la info de PORTE que capturó del dueño.
-// La guardamos en number_port_requests (status 'submitted'); OPS somete el porte a mano en
-// la consola de Twilio con estos datos. No automatizamos el port-in todavía (bajo volumen).
+// mamacita-port-request — NXTUP crea un request de PORTE con lo NO sensible y recibe un
+// ENLACE DE UN SOLO USO para que el dueño meta la data sensible (cuenta/PIN/dirección/
+// factura/LOA) por el lado de Mamacita. La data sensible NO pasa por NXTUP (acuerdo 17-oct).
+// El porte a Twilio lo hace OPS a mano con la info ya completa.
 //
-// Request (POST firmado HMAC): {
-//   shop_id, phone_number, carrier_name?, carrier_account_number?, carrier_pin?,
-//   service_address?, authorized_name?, bill_url?, loa_signer_name?, loa_signed_at?
-// }
-// Response 200: { status: 'received', port_request_id }
-// NO logueamos los campos sensibles (PIN / número de cuenta).
+// Request (POST firmado HMAC): { shop_id, phone_number, carrier_name?, authorized_name? }
+// Response 200: { status: 'collecting', port_request_id, intake_url }
+//   intake_url = enlace seguro que NXTUP le muestra/envía al dueño para completar el porte.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { authNxtup } from "../_shared/nxtup-auth.ts";
@@ -18,6 +16,12 @@ const corsHeaders = {
 };
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+function randomToken(): string {
+  const b = new Uint8Array(24);
+  crypto.getRandomValues(b);
+  return Array.from(b).map((x) => x.toString(16).padStart(2, "0")).join("");
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -32,30 +36,29 @@ Deno.serve(async (req) => {
   const phone = String(payload.phone_number || "").trim();
   if (!phone) return json({ error: "Missing phone_number" }, 400);
 
-  const row = {
-    shop_id: shop.id,
-    phone_number: phone,
-    carrier_name: payload.carrier_name ?? null,
-    carrier_account_number: payload.carrier_account_number ?? null,
-    carrier_pin: payload.carrier_pin ?? null,
-    service_address: payload.service_address ?? null,
-    authorized_name: payload.authorized_name ?? null,
-    bill_url: payload.bill_url ?? null,
-    loa_signer_name: payload.loa_signer_name ?? null,
-    loa_signed_at: payload.loa_signed_at ?? null,
-    status: "submitted",
-  };
+  const token = randomToken();
+  const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 días
 
+  // Solo lo NO sensible desde NXTUP. La cuenta/PIN/dirección/factura/LOA entran por el enlace.
   const { data, error } = await supabase
     .from("number_port_requests")
-    .insert(row)
+    .insert({
+      shop_id: shop.id,
+      phone_number: phone,
+      carrier_name: payload.carrier_name ?? null,
+      authorized_name: payload.authorized_name ?? null,
+      status: "collecting",
+      port_token: token,
+      port_token_expires_at: expires,
+    })
     .select("id")
     .single();
   if (error) {
     console.error("[port-request] insert failed:", error.message);
-    return json({ error: "Could not save port request" }, 500);
+    return json({ error: "Could not create port request" }, 500);
   }
 
-  console.log(`[port-request] shop=${shop.id} phone=${phone} saved (ops to submit manually)`);
-  return json({ status: "received", port_request_id: data.id });
+  const intakeUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mamacita-port-intake?token=${token}`;
+  console.log(`[port-request] shop=${shop.id} phone=${phone} created (collecting)`);
+  return json({ status: "collecting", port_request_id: data.id, intake_url: intakeUrl });
 });

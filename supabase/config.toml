@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.mamacita-port-status]
 verify_jwt = false
+
+[functions.mamacita-port-intake]
+verify_jwt = false
