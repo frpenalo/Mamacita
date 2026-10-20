@@ -13,6 +13,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, content-type, x-nxtup-signature, x-nxtup-timestamp",
 };
 
+// Overlays conocidos de los metros que servimos: cuando el código exacto se agota (p.ej. 919
+// en Raleigh = 0), el overlay comparte EXACTAMENTE la misma geografía (984). Twilio no expone
+// esto por API, y el radio genérico (NearNumber) mete códigos vecinos que NO son la misma
+// ciudad (910/472/252), así que para estos metros buscamos el overlay DIRECTO. Además el radio
+// no sirve si el exacto está en 0 (no hay número real para anclar). Fuera de estos metros se usa
+// el radio genérico como respaldo.
+const AREA_OVERLAY: Record<string, string[]> = {
+  "919": ["984"], "984": ["919"],   // Raleigh / Durham
+  "704": ["980"], "980": ["704"],   // Charlotte
+  "336": ["743"], "743": ["336"],   // Greensboro / Winston-Salem
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -49,24 +61,34 @@ Deno.serve(async (req) => {
   let numbers = exact;
   let fallbackNote: string | undefined;
 
-  // 2) Si el código exacto está agotado o casi, completar con el OVERLAY geográfico de la
-  // misma zona. Se ancla en un número REAL del área (uno de los exactos), NO en un 555, que
-  // Twilio no geolocaliza. NearNumber a 40 millas; si aún falta, ensanchar a 100. Genérico.
   if (areaCode && exact.length < MIN_EXACT) {
-    const anchor = exact[0];
-    if (anchor) {
-      let overlay = await searchNear(anchor, 40, sid, token, TARGET);
-      if (merge([exact, overlay]).length < MIN_EXACT) {
-        overlay = merge([overlay, await searchNear(anchor, 100, sid, token, TARGET)]);
-      }
-      numbers = merge([exact, overlay]);
-      if (numbers.length > exact.length) {
-        fallbackNote = exact.length === 0
-          ? `No hay números ${areaCode} disponibles; estos son de la misma zona.`
-          : `Pocos números ${areaCode} disponibles; completamos con números de la misma zona.`;
+    // 2) Overlay DIRECTO del mismo metro (984 para 919, etc.). Funciona aunque el exacto esté
+    // en 0, porque no depende de anclar en un número real.
+    const lists = [exact];
+    for (const oc of (AREA_OVERLAY[areaCode] || [])) {
+      lists.push(await searchAvailable(oc, sid, token, TARGET));
+    }
+    let combined = merge(lists);
+
+    // 3) Si todavía faltan y tenemos algún número real, ensanchar por cercanía (radio genérico).
+    if (combined.length < MIN_EXACT) {
+      const anchor = combined[0];
+      if (anchor) {
+        combined = merge([combined, await searchNear(anchor, 40, sid, token, TARGET)]);
+        if (combined.length < MIN_EXACT) {
+          combined = merge([combined, await searchNear(anchor, 100, sid, token, TARGET)]);
+        }
       }
     }
-    // 3) Último recurso: área sin exactos (no hay ancla) → cualquier US local, avisándolo.
+    numbers = combined;
+
+    if (numbers.length > exact.length) {
+      fallbackNote = exact.length === 0
+        ? `No hay números ${areaCode} disponibles; estos son de la misma zona.`
+        : `Pocos números ${areaCode} disponibles; completamos con números de la misma zona.`;
+    }
+
+    // 4) Último recurso: área sin exactos ni overlay disponible → cualquier US local, avisándolo.
     if (numbers.length === 0) {
       numbers = await searchAvailable(undefined, sid, token, TARGET);
       if (numbers.length > 0) fallbackNote = `No hay números ${areaCode} ni cercanos disponibles; estos son otros disponibles.`;
