@@ -140,12 +140,25 @@ Deno.serve(async (req) => {
             status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        await supabase.from("shops").insert({
+        const { error: insErr } = await supabase.from("shops").insert({
           nxtup_shop_id: nxtupShopId,
           nxtup_shared_secret: sharedSecret,
           nxtup_api_url: globalApiUrl,
           ...update,
         });
+        if (insErr) {
+          // Carrera (TOCTOU): un evento concurrente ya creó el shop. El índice único en
+          // nxtup_shop_id hace fallar este insert (23505) → re-resolver y ACTUALIZAR en vez
+          // de duplicar. (Mismo patrón que mordió al billing de NXTUP con NuevaYol.)
+          if (insErr.code === "23505") {
+            const { data: raced } = await supabase.from("shops").select("id").eq("nxtup_shop_id", nxtupShopId).maybeSingle();
+            if (raced && Object.keys(update).length > 0) {
+              await supabase.from("shops").update(update).eq("id", raced.id);
+            }
+          } else {
+            throw insErr;
+          }
+        }
       }
       console.log(`[nxtup-events] shop_profile_updated nxtup_shop_id=${nxtupShopId} created=${!shop} ${JSON.stringify(update)}`);
       return new Response(JSON.stringify({ ok: true, created: !shop, updated: update }), {
