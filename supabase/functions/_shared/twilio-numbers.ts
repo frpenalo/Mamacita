@@ -31,3 +31,32 @@ export async function searchAvailable(
   // deno-lint-ignore no-explicit-any
   return (data.available_phone_numbers || []).map((n: any) => n.phone_number).filter(Boolean);
 }
+
+/**
+ * Overlay geográfico: números disponibles CERCA de un número (NearNumber + Distance en millas).
+ * Sirve para cuando el area code exacto está agotado — Twilio trae los de la misma zona
+ * (p.ej. cerca de un 919 de Raleigh devuelve 984, el overlay), genérico y sin mapa hardcodeado.
+ */
+export async function searchNear(
+  nearE164: string,
+  distanceMiles: number,
+  sid: string,
+  token: string,
+  limit = 20,
+): Promise<string[]> {
+  const auth = btoa(`${sid}:${token}`);
+  const url = new URL(`https://api.twilio.com/2010-04-01/Accounts/${sid}/AvailablePhoneNumbers/US/Local.json`);
+  url.searchParams.set("VoiceEnabled", "true");
+  url.searchParams.set("SmsEnabled", "true");
+  url.searchParams.set("PageSize", String(limit));
+  url.searchParams.set("NearNumber", nearE164);
+  url.searchParams.set("Distance", String(distanceMiles));
+  const res = await fetch(url.toString(), { headers: { Authorization: `Basic ${auth}` } });
+  if (!res.ok) {
+    console.error(`[twilio-numbers] near ${res.status}:`, await res.text());
+    return [];
+  }
+  const data = await res.json();
+  // deno-lint-ignore no-explicit-any
+  return (data.available_phone_numbers || []).map((n: any) => n.phone_number).filter(Boolean);
+}

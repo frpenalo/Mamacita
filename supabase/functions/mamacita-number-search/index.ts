@@ -6,7 +6,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { authNxtup } from "../_shared/nxtup-auth.ts";
-import { searchAvailable } from "../_shared/twilio-numbers.ts";
+import { searchAvailable, searchNear } from "../_shared/twilio-numbers.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,12 +30,47 @@ Deno.serve(async (req) => {
   const sid = Deno.env.get("TWILIO_ACCOUNT_SID")!;
   const token = Deno.env.get("TWILIO_AUTH_TOKEN")!;
 
-  let numbers = await searchAvailable(areaCode, sid, token);
+  const TARGET = 20;
+  const MIN_EXACT = 10; // si hay menos que esto del código exacto, completamos con el overlay
+
+  // 1) Código exacto (como antes).
+  const exact = await searchAvailable(areaCode, sid, token, TARGET);
+
+  // deno-lint-ignore no-explicit-any
+  const merge = (lists: string[][]) => {
+    const seen = new Set<string>(), out: string[] = [];
+    for (const list of lists) for (const n of list) {
+      if (!seen.has(n)) { seen.add(n); out.push(n); }
+      if (out.length >= TARGET) return out;
+    }
+    return out;
+  };
+
+  let numbers = exact;
   let fallbackNote: string | undefined;
-  // Sin disponibles en ese área code → buscar sin área code (otros US local) y avisarlo.
-  if (numbers.length === 0 && areaCode) {
-    numbers = await searchAvailable(undefined, sid, token);
-    if (numbers.length > 0) fallbackNote = `No había números disponibles en el área ${areaCode}; estos son otros disponibles.`;
+
+  // 2) Si el código exacto está agotado o casi, completar con el OVERLAY geográfico de la
+  // misma zona. Se ancla en un número REAL del área (uno de los exactos), NO en un 555, que
+  // Twilio no geolocaliza. NearNumber a 40 millas; si aún falta, ensanchar a 100. Genérico.
+  if (areaCode && exact.length < MIN_EXACT) {
+    const anchor = exact[0];
+    if (anchor) {
+      let overlay = await searchNear(anchor, 40, sid, token, TARGET);
+      if (merge([exact, overlay]).length < MIN_EXACT) {
+        overlay = merge([overlay, await searchNear(anchor, 100, sid, token, TARGET)]);
+      }
+      numbers = merge([exact, overlay]);
+      if (numbers.length > exact.length) {
+        fallbackNote = exact.length === 0
+          ? `No hay números ${areaCode} disponibles; estos son de la misma zona.`
+          : `Pocos números ${areaCode} disponibles; completamos con números de la misma zona.`;
+      }
+    }
+    // 3) Último recurso: área sin exactos (no hay ancla) → cualquier US local, avisándolo.
+    if (numbers.length === 0) {
+      numbers = await searchAvailable(undefined, sid, token, TARGET);
+      if (numbers.length > 0) fallbackNote = `No hay números ${areaCode} ni cercanos disponibles; estos son otros disponibles.`;
+    }
   }
 
   // deno-lint-ignore no-explicit-any
