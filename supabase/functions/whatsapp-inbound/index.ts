@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
     // Chequeo RÁPIDO (sin LLM); si hay, se maneja en background y no sigue el flujo normal.
     const negoCtx = await checkNegotiation(supabase, fromPhone, barberSender);
     if (negoCtx) {
-      const work = handleNegotiationTurn(supabase, negoCtx, body);
+      const work = handleNegotiationTurn(supabase, negoCtx, body, params["ButtonPayload"] || null);
       // @ts-ignore EdgeRuntime existe en Supabase Edge Functions
       if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
         // @ts-ignore
@@ -233,6 +233,7 @@ Deno.serve(async (req) => {
         sessionId: session.id,
         clientPhone: fromPhone,
         clientName: profileName,
+        buttonPayload: params["ButtonPayload"] || null,
       });
       // @ts-ignore EdgeRuntime existe en Supabase Edge Functions
       if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {

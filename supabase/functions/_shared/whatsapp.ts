@@ -79,3 +79,26 @@ export async function sendTemplate(
   console.error("[whatsapp] template send failed:", data);
   return null;
 }
+
+// Mensaje con 1-3 botones de respuesta rápida (plantillas TWILIO_TPL_SLOTS_1..3, cuerpo
+// "📅 {{1}} 👇"; sin aprobación de Meta, solo dentro de la ventana de 24h). El id del botón
+// vuelve en ButtonPayload al tocarlo. Título ≤20 chars; message en UNA línea.
+// Si la plantilla falla, cae a texto con las opciones como lista.
+export async function sendButtons(
+  to: string,
+  message: string,
+  buttons: { title: string; id: string }[],
+): Promise<string | null> {
+  const n = Math.min(buttons.length, 3);
+  const sid = Deno.env.get(`TWILIO_TPL_SLOTS_${n}`);
+  if (sid && n > 0) {
+    const vars: Record<string, string> = { "1": message };
+    buttons.slice(0, n).forEach((b, i) => {
+      vars[String(2 + i)] = b.title;
+      vars[String(2 + n + i)] = b.id;
+    });
+    const sent = await sendTemplate(to, sid, vars);
+    if (sent) return sent;
+  }
+  return await sendWhatsApp(to, `${message}\n\n${buttons.map((b) => `• ${b.title}`).join("\n")}`);
+}

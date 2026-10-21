@@ -11,9 +11,9 @@
 
 import { formatInTimeZone } from "https://esm.sh/date-fns-tz@3.2.0";
 import { getAvailableSlots, rescheduleAppointment, type Barber } from "./appointments.ts";
-import { formatPhoneForWhatsApp, sendWhatsApp } from "./whatsapp.ts";
+import { formatPhoneForWhatsApp, sendButtons, sendWhatsApp } from "./whatsapp.ts";
 import { formatApptEs } from "./barber.ts";
-import { formatAppt, getClientLang, t } from "./i18n.ts";
+import { formatAppt, getClientLang, type Lang, t } from "./i18n.ts";
 
 // deno-lint-ignore no-explicit-any
 type Supa = any;
@@ -81,19 +81,54 @@ async function findSlot(supabase: Supa, barber: Barber, date: string, timeLabel:
   return slots.find((s) => norm(s.label) === norm(timeLabel)) || null;
 }
 
-/** Texto con algunos huecos libres de los próximos días (para que el barbero elija). */
-async function upcomingSlotsMsg(supabase: Supa, barber: Barber, tz: string, durationMin: number): Promise<string> {
-  const todayStr = formatInTimeZone(new Date(), tz, "yyyy-MM-dd");
-  const base = new Date(`${todayStr}T12:00:00Z`).getTime();
-  const lines: string[] = [];
-  for (let i = 0; i < 7 && lines.length < 4; i++) {
+/** Botones con horas libres ALREDEDOR de la cita que se mueve: hasta 2 del mismo día (la más
+ *  cercana antes y después) + la más parecida en hora del siguiente día con huecos.
+ *  Título "jue 29 oct, 9:45 AM" (≤20 chars); id = nego|<inicio UTC>. */
+async function slotButtonsAround(supabase: Supa, barber: Barber, tz: string, durationMin: number, origStartUtc: string) {
+  const origMs = new Date(origStartUtc).getTime();
+  const origDate = formatInTimeZone(origStartUtc, tz, "yyyy-MM-dd");
+  const minutesOfDay = (iso: string) => {
+    const [h, m] = formatInTimeZone(iso, tz, "HH:mm").split(":").map(Number);
+    return h * 60 + m;
+  };
+  const origMin = minutesOfDay(origStartUtc);
+
+  const same = await getAvailableSlots(supabase, barber, origDate, durationMin);
+  const before = [...same].reverse().find((s) => new Date(s.startUtc).getTime() < origMs);
+  const after = same.find((s) => new Date(s.startUtc).getTime() > origMs);
+  const picked = [before, after].filter(Boolean) as typeof same;
+  // Si falta antes o después, completa con la siguiente más cercana del mismo día.
+  for (const s of [...same].sort((a, b) => Math.abs(new Date(a.startUtc).getTime() - origMs) - Math.abs(new Date(b.startUtc).getTime() - origMs))) {
+    if (picked.length >= 2) break;
+    if (!picked.includes(s)) picked.push(s);
+  }
+
+  const base = new Date(`${origDate}T12:00:00Z`).getTime();
+  for (let i = 1; i <= 7; i++) {
     const dateStr = new Date(base + i * 86400000).toISOString().slice(0, 10);
     const slots = await getAvailableSlots(supabase, barber, dateStr, durationMin);
     if (slots.length === 0) continue;
-    const dayLabel = i === 0 ? "hoy" : i === 1 ? "mañana" : DOW_FULL[new Date(`${dateStr}T12:00:00Z`).getUTCDay()];
-    lines.push(`${dayLabel}: ${slots.slice(0, 2).map((s) => s.label).join(", ")}`);
+    picked.push(slots.reduce((best, s) => Math.abs(minutesOfDay(s.startUtc) - origMin) < Math.abs(minutesOfDay(best.startUtc) - origMin) ? s : best));
+    break;
   }
-  return lines.length ? `\nTus horas libres → ${lines.join(" · ")}` : "";
+
+  return picked
+    .sort((a, b) => new Date(a.startUtc).getTime() - new Date(b.startUtc).getTime())
+    .map((s) => ({ title: formatApptEs(s.startUtc, tz), id: `nego|${s.startUtc}` }));
+}
+
+/** Manda las horas libres como botones; sin huecos, solo el texto. */
+async function sendSlotChoice(supabase: Supa, barber: Barber, to: string, tz: string, durationMin: number, origStartUtc: string, message: string) {
+  const buttons = await slotButtonsAround(supabase, barber, tz, durationMin, origStartUtc);
+  if (buttons.length) await sendButtons(formatPhoneForWhatsApp(to), message, buttons);
+  else await sendWhatsApp(formatPhoneForWhatsApp(to), message);
+}
+
+/** El hueco exacto de un botón nego|<inicio UTC>, si sigue libre. */
+async function slotFromPayload(supabase: Supa, barber: Barber, tz: string, startUtc: string, durationMin: number) {
+  const date = formatInTimeZone(startUtc, tz, "yyyy-MM-dd");
+  const slots = await getAvailableSlots(supabase, barber, date, durationMin);
+  return slots.find((s) => s.startUtc === startUtc) || null;
 }
 
 async function getAppt(supabase: Supa, id: string) {
@@ -126,9 +161,8 @@ export async function startNegotiation(
     await supabase.from("negotiations").insert({ appointment_id: appt.id, barber_id: barber.id, client_phone: cust.phone_number, status: "barber_choosing", rounds: 0 });
   }
   const tz = barber.timezone || "America/New_York";
-  const slotsMsg = await upcomingSlotsMsg(supabase, barber, tz, apptDurationMin(appt));
-  await sendWhatsApp(formatPhoneForWhatsApp(to),
-    `Vamos a mover la cita de ${cust.name || "el cliente"} (${formatApptEs(appt.start_time, tz)}).\n¿A qué hora SÍ puedes?${slotsMsg}\nDime una hora, o "cancelar" para dejarla igual.`);
+  await sendSlotChoice(supabase, barber, to, tz, apptDurationMin(appt), appt.start_time,
+    `Vamos a mover la cita de ${cust.name || "el cliente"} (${formatApptEs(appt.start_time, tz)}). ¿A qué hora SÍ puedes? Toca una, escribe otra hora, o "cancelar" para dejarla igual.`);
 }
 
 async function closeNegotiation(supabase: Supa, neg: any, barber: Barber, appt: any, cust: any, tz: string) {
@@ -146,7 +180,7 @@ async function closeNegotiation(supabase: Supa, neg: any, barber: Barber, appt: 
   if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), `✅ Cita movida al ${formatApptEs(neg.proposed_start_utc, tz)} (${cust?.name || "cliente"}). Ambos avisados.`);
 }
 
-async function handleBarberTurn(supabase: Supa, neg: any, barber: Barber, text: string) {
+async function handleBarberTurn(supabase: Supa, neg: any, barber: Barber, text: string, buttonPayload: string | null) {
   const tz = barber.timezone || "America/New_York";
   const to = barberPhone(barber);
   const appt = await getAppt(supabase, neg.appointment_id);
@@ -154,6 +188,17 @@ async function handleBarberTurn(supabase: Supa, neg: any, barber: Barber, text: 
   const cust = await getCust(supabase, appt.customer_id);
   const lang = await getClientLang(supabase, barber.id, cust?.phone_number || neg.client_phone);
   const durationMin = apptDurationMin(appt);
+
+  // Tocó un botón de hora: el hueco exacto viene en el id (sin interpretar texto).
+  if (buttonPayload?.startsWith("nego|")) {
+    const slot = await slotFromPayload(supabase, barber, tz, buttonPayload.slice(5), durationMin);
+    if (!slot) {
+      if (to) await sendSlotChoice(supabase, barber, to, tz, durationMin, appt.start_time, `Esa hora ya se ocupó. Toca otra, escribe una hora, o "cancelar".`);
+      return;
+    }
+    await proposeToClient(supabase, neg, barber, cust, lang, tz, to, slot);
+    return;
+  }
 
   if (isBail(text)) {
     await setStatus(supabase, neg.id, { status: "cancelled" });
@@ -179,10 +224,13 @@ async function handleBarberTurn(supabase: Supa, neg: any, barber: Barber, text: 
   const dt = await extractDateTime(text, tz);
   const slot = dt ? await resolveSlot(supabase, barber, tz, dt, durationMin) : null;
   if (!slot) {
-    const msg = await upcomingSlotsMsg(supabase, barber, tz, durationMin);
-    if (to) await sendWhatsApp(formatPhoneForWhatsApp(to), `No pude tomar esa hora.${msg}\nDime una de esas horas, o "cancelar".`);
+    if (to) await sendSlotChoice(supabase, barber, to, tz, durationMin, appt.start_time, `No pude tomar esa hora. Toca una de estas, escribe otra, o "cancelar".`);
     return;
   }
+  await proposeToClient(supabase, neg, barber, cust, lang, tz, to, slot);
+}
+
+async function proposeToClient(supabase: Supa, neg: any, barber: Barber, cust: any, lang: Lang, tz: string, to: string | null, slot: { startUtc: string; endUtc: string }) {
   await setStatus(supabase, neg.id, { status: "client_deciding", proposed_start_utc: slot.startUtc, proposed_end_utc: slot.endUtc });
   if (cust?.phone_number) await sendWhatsApp(formatPhoneForWhatsApp(cust.phone_number),
     t("nego_propose", lang, { name: cust.name ? " " + cust.name : "", barber: barber.name, when: formatAppt(slot.startUtc, tz, lang) }));
@@ -261,10 +309,10 @@ export async function checkNegotiation(supabase: Supa, senderPhone: string, barb
 }
 
 /** Maneja el turno (puede tardar: usa LLM). Correr en background. */
-export async function handleNegotiationTurn(supabase: Supa, ctx: NegotiationCtx, text: string): Promise<void> {
+export async function handleNegotiationTurn(supabase: Supa, ctx: NegotiationCtx, text: string, buttonPayload: string | null = null): Promise<void> {
   try {
     if (ctx.role === "client") await handleClientTurn(supabase, ctx.neg, ctx.barber, text, ctx.clientPhone!);
-    else await handleBarberTurn(supabase, ctx.neg, ctx.barber, text);
+    else await handleBarberTurn(supabase, ctx.neg, ctx.barber, text, buttonPayload);
   } catch (e) {
     console.error("[negotiation] turn error:", e);
   }

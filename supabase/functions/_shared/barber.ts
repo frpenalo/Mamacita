@@ -147,12 +147,16 @@ export async function handleBarberCommand(supabase: Supa, barber: Barber, text: 
     return;
   }
 
-  // CONFIRMAR = acuse al barbero + avisar al cliente con la DIRECCIÓN (opción A: ya nace confirmada).
+  // CONFIRMAR = acuse al barbero + avisar al cliente con la DIRECCIÓN. Al agendar se le dijo al
+  // cliente que este mensaje llegaría, así que sale aunque el barbero no tenga dirección.
+  // Calendario: WhatsApp convierte la fecha en link "Add to calendar"; el texto solo lo indica.
   const address = (barber.address || "").trim();
-  if (cust?.phone_number && address) {
+  if (cust?.phone_number) {
     await sendWhatsApp(
       formatPhoneForWhatsApp(cust.phone_number),
-      t("client_confirmed", lang, { barber: barber.name, when: whenClient, address }),
+      address
+        ? t("client_confirmed", lang, { barber: barber.name, when: whenClient, address })
+        : t("client_confirmed_noaddr", lang, { barber: barber.name, when: whenClient }),
     );
   }
   if (to) {

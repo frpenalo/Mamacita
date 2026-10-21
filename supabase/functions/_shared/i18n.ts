@@ -38,9 +38,17 @@ const S = (es: string, en: string) => ({ es, en });
 
 // Textos parametrizables al cliente. {var} se reemplaza con las vars que se pasen.
 const STR: Record<string, { es: string; en: string }> = {
-  ics_caption: S(
-    "📅 Agrega tu cita a tu calendario (toca el archivo).",
-    "📅 Add your appointment to your calendar (tap the file).",
+  booking_pending: S(
+    "¡Gracias por escribirnos! 🙌 Le enviamos tu cita a {barber} para que la confirme. En cuanto lo haga, te llega un mensaje por aquí. ¡Nos vemos pronto! 💈",
+    "Thanks for reaching out! 🙌 We sent your appointment to {barber} to confirm. As soon as they do, you'll get a message here. See you soon! 💈",
+  ),
+  booking_retry: S(
+    "¿Me confirmas el día y la hora que prefieres? Así te la aparto. 🙏",
+    "Could you confirm the day and time you'd like? I'll hold it for you. 🙏",
+  ),
+  slots_default: S(
+    "Estas son las horas disponibles",
+    "Here are the available times",
   ),
   err_retry: S(
     "Disculpa, tuve un pequeño problema. ¿Me repites, por favor?",
@@ -89,8 +97,12 @@ const STR: Record<string, { es: string; en: string }> = {
     "Hi 👋 {barber} had something come up and had to cancel your appointment on {when}. Message us anytime to reschedule. 🙏",
   ),
   client_confirmed: S(
-    "✅ ¡{barber} confirmó tu cita del {when}!\n📍 Dirección: {address}\n¡Te esperamos! 💈",
-    "✅ {barber} confirmed your appointment on {when}!\n📍 Address: {address}\nSee you then! 💈",
+    "✅ ¡{barber} confirmó tu cita del {when}!\n📍 Dirección: {address}\n\n📅 Toca la fecha para agregarla a tu calendario.\n¡Te esperamos! 💈",
+    "✅ {barber} confirmed your appointment on {when}!\n📍 Address: {address}\n\n📅 Tap the date to add it to your calendar.\nSee you then! 💈",
+  ),
+  client_confirmed_noaddr: S(
+    "✅ ¡{barber} confirmó tu cita del {when}!\n\n📅 Toca la fecha para agregarla a tu calendario.\n¡Te esperamos! 💈",
+    "✅ {barber} confirmed your appointment on {when}!\n\n📅 Tap the date to add it to your calendar.\nSee you then! 💈",
   ),
 };
 
