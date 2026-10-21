@@ -26,6 +26,19 @@ const ASSISTANT_ID = "155157c5-6884-4fb2-a734-de26675ed69e";
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
+// Libera un número comprado en Twilio (compensación cuando un paso POSTERIOR falla), para no
+// dejar números huérfanos que se cobran sin usarse.
+async function releaseTwilioNumber(acctSid: string, basicAuth: string, pnSid: string): Promise<void> {
+  try {
+    await fetch(`https://api.twilio.com/2010-04-01/Accounts/${acctSid}/IncomingPhoneNumbers/${pnSid}.json`, {
+      method: "DELETE", headers: { Authorization: `Basic ${basicAuth}` },
+    });
+    console.log(`[number-request] released Twilio number ${pnSid} (rollback)`);
+  } catch (e) {
+    console.error("[number-request] release failed:", e);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -47,6 +60,12 @@ Deno.serve(async (req) => {
   // solo difieren en metadata + la guía de desvío que devolvemos.
   const isForward = payload.choice === "forward";
   if (payload.choice !== "buy" && !isForward) return json({ error: "Unknown choice" }, 400);
+
+  // Idempotencia: si el shop YA tiene número, no comprar otro (evita doble compra / huérfanos
+  // en reintentos). Devuelve el que ya tiene.
+  if (shop.phone_number) {
+    return json({ status: "completed", number: shop.phone_number, setup: shop.number_setup ?? "bought", already: true });
+  }
 
   const requested = String(payload.requested_number || "").trim();
   if (!requested) return json({ error: "Missing requested_number" }, 400);
@@ -74,6 +93,9 @@ Deno.serve(async (req) => {
   const number: string = buyData.phone_number || requested;
 
   // 2. Importar el número a VAPI (provider twilio) y apuntarlo al assistant de Julie.
+  // El `name` de VAPI tiene límite de 40 caracteres: sanitizar (sin emojis/no-ASCII) y recortar,
+  // o VAPI responde 400 y el número quedaría huérfano (bug real con nombres largos/con emojis).
+  const vapiName = `${shop.name} - MamaCita`.replace(/[^\x20-\x7E]/g, "").replace(/\s+/g, " ").trim().slice(0, 40);
   const vapiRes = await fetch("https://api.vapi.ai/phone-number", {
     method: "POST",
     headers: { Authorization: `Bearer ${Deno.env.get("VAPI_PRIVATE_KEY")}`, "Content-Type": "application/json" },
@@ -84,12 +106,13 @@ Deno.serve(async (req) => {
       twilioAuthToken: token,
       assistantId: ASSISTANT_ID,
       server: { url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/vapi-assistant-request` },
-      name: `${shop.name} - MamaCita`,
+      name: vapiName,
     }),
   });
 
   if (!vapiRes.ok) {
     console.error("[number-request] vapi import failed:", vapiRes.status, await vapiRes.text());
+    await releaseTwilioNumber(sid, basic, buyData.sid); // rollback: no dejar huérfano
     return json({ status: "failed", fail_reason: "provisioning_error" });
   }
   const vapiData = await vapiRes.json();
@@ -111,6 +134,7 @@ Deno.serve(async (req) => {
   const { error: upErr } = await supabase.from("shops").update(shopUpdate).eq("id", shop.id);
   if (upErr) {
     console.error("[number-request] shop update failed:", upErr);
+    await releaseTwilioNumber(sid, basic, buyData.sid); // rollback: no dejar huérfano
     return json({ status: "failed", fail_reason: "provisioning_error" });
   }
 
