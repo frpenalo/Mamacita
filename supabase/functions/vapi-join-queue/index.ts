@@ -35,27 +35,40 @@ async function pushToNxtup(shop: any, entry: any): Promise<void> {
     check_in_code: entry.check_in_code,
     eta_at: entry.eta_at,
   });
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const signature = await hmacHex(shop.nxtup_shared_secret, `${timestamp}.${body}`);
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3000);
-  const res = await fetch(`${shop.nxtup_api_url}/api/mamacita/queue-entries`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${shop.nxtup_shared_secret}`,
-      "x-mamacita-signature": signature,
-      "x-mamacita-timestamp": timestamp,
-    },
-    body,
-    signal: controller.signal,
-  });
-  clearTimeout(timeout);
-  if (!res.ok) {
-    throw new Error(`NXTUP queue-entries returned ${res.status}`);
+  // Reintentos: un tropiezo pasajero (cold start de Vercel, red lenta) NO debe dejar al cliente
+  // fuera del floor de NXTUP. 3 intentos, 8s cada uno, con backoff. La firma se recalcula por
+  // intento (el timestamp debe estar fresco para la ventana de 5 min). external_id dedup del lado
+  // de NXTUP evita duplicar si un intento llegó pero la respuesta no volvió.
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const signature = await hmacHex(shop.nxtup_shared_secret, `${timestamp}.${body}`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(`${shop.nxtup_api_url}/api/mamacita/queue-entries`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${shop.nxtup_shared_secret}`,
+          "x-mamacita-signature": signature,
+          "x-mamacita-timestamp": timestamp,
+        },
+        body,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (res.ok) {
+        console.log(`[join-queue] pushed to NXTUP OK (intento ${attempt})`);
+        return;
+      }
+      lastErr = new Error(`NXTUP queue-entries returned ${res.status}`);
+    } catch (e) {
+      lastErr = e;
+    }
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 600 * attempt));
   }
-  console.log("[join-queue] pushed to NXTUP OK");
+  throw lastErr;
 }
 
 Deno.serve(async (req) => {
