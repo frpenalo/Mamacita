@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.mamacita-port-intake]
 verify_jwt = false
+
+[functions.barber-appointment-action]
+verify_jwt = false

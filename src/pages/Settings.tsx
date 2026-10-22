@@ -14,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LogOut, CalendarIcon, Ban, Trash2, Clock } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { cn, zonedTimeToUtc } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { type DateRange } from 'react-day-picker';
@@ -133,12 +133,11 @@ const Settings = () => {
     const from = blockRange.from;
     const to = blockRange.to || blockRange.from; // un solo día si no eligió fin
     setBlockingSaving(true);
-    const startStr = `${format(from, 'yyyy-MM-dd')}T${blockStartTime}:00-05:00`;
-    const endStr = `${format(to, 'yyyy-MM-dd')}T${blockEndTime}:00-05:00`;
+    const tz = (barber as any).timezone || 'America/New_York';
     const { error } = await supabase.from('blocked_times').insert({
       barber_id: barber.id,
-      start_time: new Date(startStr).toISOString(),
-      end_time: new Date(endStr).toISOString(),
+      start_time: zonedTimeToUtc(format(from, 'yyyy-MM-dd'), blockStartTime, tz).toISOString(),
+      end_time: zonedTimeToUtc(format(to, 'yyyy-MM-dd'), blockEndTime, tz).toISOString(),
       reason: blockReason || null,
     });
     setBlockingSaving(false);

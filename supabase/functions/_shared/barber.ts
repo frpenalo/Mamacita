@@ -8,10 +8,9 @@
 
 import { formatInTimeZone } from "https://esm.sh/date-fns-tz@3.2.0";
 import { formatPhoneForWhatsApp, sendTemplate, sendWhatsApp } from "./whatsapp.ts";
-import { cancelReminders } from "./reminders.ts";
 import type { Barber } from "./appointments.ts";
 import { startNegotiation } from "./negotiation.ts";
-import { formatAppt, getClientLang, t } from "./i18n.ts";
+import { type BarberAppt, cancelByBarber, confirmByBarber } from "./appointment-actions.ts";
 
 // deno-lint-ignore no-explicit-any
 type Supa = any;
@@ -119,9 +118,6 @@ export async function handleBarberCommand(supabase: Supa, barber: Barber, text: 
   const when = formatApptEs(appt.start_time, tz); // para los avisos al BARBERO (siempre español)
   // deno-lint-ignore no-explicit-any
   const cust = (appt as any).customers;
-  // Idioma del cliente para localizar SOLO lo que le llega a él.
-  const lang = cust?.phone_number ? await getClientLang(supabase, barber.id, cust.phone_number) : "es";
-  const whenClient = formatAppt(appt.start_time, tz, lang);
 
   // MODIFICAR → arranca la negociación de cambio de hora (barbero ↔ cliente).
   if (isModify) {
@@ -130,37 +126,22 @@ export async function handleBarberCommand(supabase: Supa, barber: Barber, text: 
   }
 
   if (isCancel) {
-    await supabase.from("appointments").update({ status: "cancelled" }).eq("id", appt.id);
-    await cancelReminders(supabase, appt.id);
-    if (cust?.phone_number) {
-      await sendWhatsApp(
-        formatPhoneForWhatsApp(cust.phone_number),
-        t("client_cancelled", lang, { barber: barber.name, when: whenClient }),
-      );
-    }
+    const r = await cancelByBarber(supabase, barber, appt as BarberAppt);
     if (to) {
       await sendWhatsApp(
         formatPhoneForWhatsApp(to),
-        `❌ Cita cancelada (${cust?.name || "cliente"}, ${when}). Ya avisé al cliente.`,
+        r.ok ? `❌ Cita cancelada (${cust?.name || "cliente"}, ${when}). Ya avisé al cliente.` : "No pude cancelar la cita; intenta de nuevo.",
       );
     }
     return;
   }
 
-  // CONFIRMAR = acuse al barbero + avisar al cliente con la DIRECCIÓN. Al agendar se le dijo al
-  // cliente que este mensaje llegaría, así que sale aunque el barbero no tenga dirección.
-  // Calendario: WhatsApp convierte la fecha en link "Add to calendar"; el texto solo lo indica.
-  const address = (barber.address || "").trim();
-  if (cust?.phone_number) {
-    await sendWhatsApp(
-      formatPhoneForWhatsApp(cust.phone_number),
-      address
-        ? t("client_confirmed", lang, { barber: barber.name, when: whenClient, address })
-        : t("client_confirmed_noaddr", lang, { barber: barber.name, when: whenClient }),
-    );
-  }
+  const r = await confirmByBarber(supabase, barber, appt as BarberAppt, "whatsapp");
   if (to) {
-    await sendWhatsApp(formatPhoneForWhatsApp(to), `✅ Confirmada: ${cust?.name || "cliente"} — ${when}. ¡Listo!`);
+    await sendWhatsApp(
+      formatPhoneForWhatsApp(to),
+      r.already ? `✅ Ya estaba confirmada: ${cust?.name || "cliente"} — ${when}.` : `✅ Confirmada: ${cust?.name || "cliente"} — ${when}. ¡Listo!`,
+    );
   }
 }
 

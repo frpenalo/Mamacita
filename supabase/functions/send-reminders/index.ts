@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
 
       // deno-lint-ignore no-explicit-any
       const cust = (appt as any)?.customers;
-      if (!appt || appt.status !== "confirmed" || !cust?.phone_number) {
+      if (!appt || !["confirmed", "rescheduled"].includes(appt.status) || !cust?.phone_number) {
         await supabase.from("reminders").update({ status: "skipped" }).eq("id", r.id);
         continue;
       }
@@ -91,11 +91,11 @@ Deno.serve(async (req) => {
 
       const { data: sess } = await supabase
         .from("wa_sessions")
-        .select("language")
+        .select("lang")
         .eq("barber_id", r.barber_id)
         .eq("client_phone", cust.phone_number)
         .maybeSingle();
-      const lang = sess?.language || "es";
+      const lang = sess?.lang || "es";
 
       const name = cust.name || "";
       const barberName = barber?.name || "tu barbero";

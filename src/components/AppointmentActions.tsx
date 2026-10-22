@@ -30,10 +30,19 @@ const AppointmentActions = ({ appointment, barberId, barberStart = '09:00', barb
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const updateStatus = async (status: string) => {
-    const { error } = await supabase.from('appointments').update({ status }).eq('id', appointment.id);
+  // Las acciones pasan por el servidor (barber-appointment-action): ahí se avisa al cliente y se
+  // cancelan/mueven sus recordatorios. Un UPDATE directo a la tabla no hacía nada de eso.
+  const callAction = async (action: string, extra: Record<string, string> = {}) => {
+    const { error } = await supabase.functions.invoke('barber-appointment-action', {
+      body: { action, appointment_id: appointment.id, ...extra },
+    });
+    return { error, status: (error as any)?.context?.status as number | undefined };
+  };
+
+  const updateStatus = async (action: 'complete' | 'no_show' | 'cancel') => {
+    const { error } = await callAction(action);
     if (error) toast.error('Error al actualizar');
-    else { toast.success(`Cita ${status === 'cancelled' ? 'cancelada' : status === 'no_show' ? 'marcada como no show' : 'completada'}`); onUpdated(); }
+    else { toast.success(`Cita ${action === 'cancel' ? 'cancelada (avisamos al cliente)' : action === 'no_show' ? 'marcada como no show' : 'completada'}`); onUpdated(); }
   };
 
   const loadSlots = async (d: Date) => {
@@ -48,14 +57,13 @@ const AppointmentActions = ({ appointment, barberId, barberStart = '09:00', barb
   const handleReschedule = async () => {
     if (!selectedSlot) return;
     setSaving(true);
-    const { error } = await supabase.from('appointments').update({
+    const { error, status } = await callAction('reschedule', {
       start_time: selectedSlot.start.toISOString(),
       end_time: selectedSlot.end.toISOString(),
-      status: 'rescheduled',
-    }).eq('id', appointment.id);
+    });
     setSaving(false);
-    if (error) toast.error('Error al reagendar');
-    else { toast.success('Cita reagendada'); setShowReschedule(false); onUpdated(); }
+    if (error) toast.error(status === 409 ? 'Ese horario ya está ocupado; elige otro' : 'Error al reagendar');
+    else { toast.success('Cita reagendada (avisamos al cliente)'); setShowReschedule(false); onUpdated(); }
   };
 
   const formatSlotTime = (d: Date) =>
@@ -72,7 +80,7 @@ const AppointmentActions = ({ appointment, barberId, barberStart = '09:00', barb
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="bg-card border-border">
-          <DropdownMenuItem onClick={() => updateStatus('completed')} className="gap-2">
+          <DropdownMenuItem onClick={() => updateStatus('complete')} className="gap-2">
             <CheckCircle className="h-4 w-4 text-green-500" /> Completada
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => updateStatus('no_show')} className="gap-2">
@@ -81,7 +89,7 @@ const AppointmentActions = ({ appointment, barberId, barberStart = '09:00', barb
           <DropdownMenuItem onClick={() => setShowReschedule(true)} className="gap-2">
             <CalendarIcon className="h-4 w-4 text-blue-400" /> Reagendar
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => updateStatus('cancelled')} className="gap-2 text-destructive">
+          <DropdownMenuItem onClick={() => updateStatus('cancel')} className="gap-2 text-destructive">
             <XCircle className="h-4 w-4" /> Cancelar
           </DropdownMenuItem>
         </DropdownMenuContent>

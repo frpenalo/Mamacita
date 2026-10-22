@@ -96,6 +96,10 @@ const STR: Record<string, { es: string; en: string }> = {
     "Hola 👋 {barber} tuvo un imprevisto y tuvo que cancelar tu cita del {when}. Escríbenos cuando quieras para reagendar. 🙏",
     "Hi 👋 {barber} had something come up and had to cancel your appointment on {when}. Message us anytime to reschedule. 🙏",
   ),
+  client_moved_by_barber: S(
+    "Hola 👋 {barber} movió tu cita al {when}. Si no te sirve, escríbenos por aquí y lo arreglamos. 💈",
+    "Hi 👋 {barber} moved your appointment to {when}. If that doesn't work for you, message us here and we'll sort it out. 💈",
+  ),
   client_confirmed: S(
     "✅ ¡{barber} confirmó tu cita del {when}!\n📍 Dirección: {address}\n\n📅 Toca la fecha para agregarla a tu calendario.\n¡Te esperamos! 💈",
     "✅ {barber} confirmed your appointment on {when}!\n📍 Address: {address}\n\n📅 Tap the date to add it to your calendar.\nSee you then! 💈",
