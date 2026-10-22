@@ -99,12 +99,16 @@ Deno.serve(async (req) => {
   const vapiRes = await fetch("https://api.vapi.ai/phone-number", {
     method: "POST",
     headers: { Authorization: `Bearer ${Deno.env.get("VAPI_PRIVATE_KEY")}`, "Content-Type": "application/json" },
+    // SIN assistantId estático: el número queda "solo-servidor" para que VAPI llame a
+    // vapi-assistant-request en CADA llamada e inyecte las variables del shop (nombre,
+    // disponibilidad, etc.). Si se pone assistantId aquí, VAPI usa a Julie directo y NUNCA
+    // llama al webhook → Julie corre sin los datos del shop (bug real: NuevaYol no se reconocía).
+    // El assistant lo devuelve el webhook desde shops.vapi_assistant_id (igual que Fade).
     body: JSON.stringify({
       provider: "twilio",
       number,
       twilioAccountSid: sid,
       twilioAuthToken: token,
-      assistantId: ASSISTANT_ID,
       server: { url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/vapi-assistant-request` },
       name: vapiName,
     }),
@@ -122,6 +126,7 @@ Deno.serve(async (req) => {
   const shopUpdate: Record<string, any> = {
     phone_number: number,
     vapi_phone_number_id: vapiData.id,
+    vapi_assistant_id: ASSISTANT_ID, // el webhook lo devuelve por llamada (número solo-servidor)
     number_setup: isForward ? "forward" : "bought",
   };
   if (isForward) {
