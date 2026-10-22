@@ -16,11 +16,14 @@ export async function scheduleReminders(
   const rows: any[] = [];
   const t24 = start - 24 * 3600 * 1000;
   const t2 = start - 2 * 3600 * 1000;
-  if (t24 > now) rows.push({ appointment_id: info.appointmentId, barber_id: info.barberId, kind: "24h", fire_at: new Date(t24).toISOString() });
-  if (t2 > now) rows.push({ appointment_id: info.appointmentId, barber_id: info.barberId, kind: "2h", fire_at: new Date(t2).toISOString() });
+  const base = { appointment_id: info.appointmentId, barber_id: info.barberId, status: "pending", sent_at: null };
+  if (t24 > now) rows.push({ ...base, kind: "24h", fire_at: new Date(t24).toISOString() });
+  if (t2 > now) rows.push({ ...base, kind: "2h", fire_at: new Date(t2).toISOString() });
   if (rows.length === 0) return;
 
-  const { error } = await supabase.from("reminders").upsert(rows, { onConflict: "appointment_id,kind", ignoreDuplicates: true });
+  // Al reprogramar, las filas (appointment_id, kind) ya existen canceladas: se REUSAN con la
+  // hora nueva y vuelven a 'pending'. (Con ignoreDuplicates quedaban canceladas para siempre.)
+  const { error } = await supabase.from("reminders").upsert(rows, { onConflict: "appointment_id,kind" });
   if (error) console.error("[reminders] schedule failed:", error);
 }
 
