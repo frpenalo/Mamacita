@@ -24,6 +24,7 @@ interface Props {
 
 const AppointmentActions = ({ appointment, barberId, barberStart = '09:00', barberEnd = '18:00', appointmentDuration = 45, onUpdated }: Props) => {
   const [showReschedule, setShowReschedule] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [date, setDate] = useState<Date | undefined>();
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
@@ -101,7 +102,7 @@ const AppointmentActions = ({ appointment, barberId, barberStart = '09:00', barb
             <DialogTitle>Reagendar cita</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <Popover>
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className={cn("w-full justify-start", !date && "text-muted-foreground")}>
                   <CalendarIcon className="mr-2 h-4 w-4" />
@@ -112,7 +113,7 @@ const AppointmentActions = ({ appointment, barberId, barberStart = '09:00', barb
                 <Calendar
                   mode="single"
                   selected={date}
-                  onSelect={(d) => d && loadSlots(d)}
+                  onSelect={(d) => { if (d) { setCalendarOpen(false); loadSlots(d); } }}
                   disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
                   initialFocus
                   className="p-3 pointer-events-auto"
