@@ -55,6 +55,16 @@ const AppointmentActions = ({ appointment, barberId, barberStart = '09:00', barb
     setLoadingSlots(false);
   };
 
+  // Al abrir Reagendar se parte del DÍA DE LA CITA (con sus horas cargadas), no de hoy.
+  // Si la cita ya pasó, se parte de hoy: nunca se mueve una cita al pasado.
+  const openReschedule = () => {
+    const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(appointment.start_time));
+    const apptDay = new Date(`${ymd}T00:00:00`);
+    const today = new Date(new Date().setHours(0, 0, 0, 0));
+    setShowReschedule(true);
+    loadSlots(apptDay < today ? today : apptDay);
+  };
+
   const handleReschedule = async () => {
     if (!selectedSlot) return;
     setSaving(true);
@@ -87,7 +97,7 @@ const AppointmentActions = ({ appointment, barberId, barberStart = '09:00', barb
           <DropdownMenuItem onClick={() => updateStatus('no_show')} className="gap-2">
             <UserX className="h-4 w-4 text-yellow-500" /> No Show
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setShowReschedule(true)} className="gap-2">
+          <DropdownMenuItem onClick={openReschedule} className="gap-2">
             <CalendarIcon className="h-4 w-4 text-blue-400" /> Reagendar
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => updateStatus('cancel')} className="gap-2 text-destructive">
@@ -113,6 +123,7 @@ const AppointmentActions = ({ appointment, barberId, barberStart = '09:00', barb
                 <Calendar
                   mode="single"
                   selected={date}
+                  defaultMonth={date}
                   onSelect={(d) => { if (d) { setCalendarOpen(false); loadSlots(d); } }}
                   disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
                   initialFocus
