@@ -5,7 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isRateLimited, secretsMatch } from "../_shared/security.ts";
-import { clockToUtc, isShopOpen } from "../_shared/shop-hours.ts";
+import { clockToUtc, isShopOpen, minutesUntilClose, WALKIN_CLOSE_CUTOFF_MIN } from "../_shared/shop-hours.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -133,6 +133,18 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           results: [{ toolCallId, result: "La barbería está cerrada en este momento, no puedo anotarte en la lista. Vuelve dentro del horario, por favor." }],
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Colchón de cierre: si faltan <= N min para cerrar, no anotar (no se alcanza a atender hoy).
+    const minsToClose = minutesUntilClose(shop.hours, shop.timezone || "America/New_York");
+    if (minsToClose !== null && minsToClose <= WALKIN_CLOSE_CUTOFF_MIN) {
+      const toolCallId = body?.message?.toolCallList?.[0]?.id;
+      return new Response(
+        JSON.stringify({
+          results: [{ toolCallId, result: "La barbería está por cerrar, ya no alcanzaríamos a atenderte hoy. No puedo anotarte. Ven más temprano la próxima o mañana, por favor." }],
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );

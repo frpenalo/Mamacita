@@ -7,7 +7,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { screenCaller } from "../_shared/call-screening.ts";
 import { isRateLimited, secretsMatch } from "../_shared/security.ts";
-import { hoursForSpeech, isShopOpen } from "../_shared/shop-hours.ts";
+import { hoursForSpeech, isShopOpen, minutesUntilClose, WALKIN_CLOSE_CUTOFF_MIN } from "../_shared/shop-hours.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -229,6 +229,9 @@ Deno.serve(async (req) => {
 
     // ¿Abierto AHORA? Se calcula del horario estructurado + la hora actual en la tz del shop.
     const shopOpen = isShopOpen(shop.hours, shop.timezone || "America/New_York");
+    // Colchón de cierre: si faltan <= N min para cerrar, Julie NO ofrece anotar (no se alcanza).
+    const minsToClose = shopOpen ? minutesUntilClose(shop.hours, shop.timezone || "America/New_York") : null;
+    const closingSoon = minsToClose !== null && minsToClose <= WALKIN_CLOSE_CUTOFF_MIN;
     const variableValues = {
       shop_id: shop.id,
       shop_name: shop.name,
@@ -237,12 +240,15 @@ Deno.serve(async (req) => {
       services_text: shop.services_text || "",
       hours: hoursForSpeech(shop.hours) || shop.hours_text || "", // horas habladas desde la estructura
       shop_open: shopOpen ? "yes" : "no",
-      professionals_available: shopOpen ? (availability?.professionals_available ?? 0) : 0,
+      closing_soon: closingSoon ? "yes" : "no",
+      professionals_available: (shopOpen && !closingSoon) ? (availability?.professionals_available ?? 0) : 0,
       queue_count: (availability?.queue_waiting ?? 0) + (availability?.queue_arrived ?? 0),
       estimated_wait_minutes: availability?.estimated_wait_minutes ?? "",
-      availability_message: shopOpen
-        ? buildAvailabilityMessage(availability)
-        : "En este momento la barbería está cerrada.",
+      availability_message: !shopOpen
+        ? "En este momento la barbería está cerrada."
+        : closingSoon
+          ? "La barbería está por cerrar, ya no alcanzaríamos a atenderte hoy. Ven más temprano la próxima o mañana, por favor."
+          : buildAvailabilityMessage(availability),
     };
 
     console.log(`[assistant-request] shop=${shop.name} av=${JSON.stringify(availability)}`);

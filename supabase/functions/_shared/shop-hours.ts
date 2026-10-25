@@ -45,6 +45,25 @@ export function clockToUtc(timeStr: string, tz: string, now?: Date): string | nu
   return utc.toISOString();
 }
 
+/** Minutos hasta el cierre de HOY (en la tz del shop). null si no hay horario, cerrado hoy,
+ * o fuera de horario. Sirve para el "colchón de cierre": no anotar walk-ins que no se alcanzan. */
+export function minutesUntilClose(hours: WeekHours | null | undefined, timezone: string, at?: Date): number | null {
+  if (!hours || Object.keys(hours).length === 0) return null;
+  const now = at ?? new Date();
+  const dayKey = formatInTimeZone(now, timezone, "EEE").toLowerCase();
+  const dh = hours[dayKey];
+  if (!dh || !dh.open || !dh.close) return null;
+  const hhmm = formatInTimeZone(now, timezone, "HH:mm");
+  if (hhmm < dh.open || hhmm >= dh.close) return null; // fuera de horario (lo maneja isShopOpen)
+  const today = formatInTimeZone(now, timezone, "yyyy-MM-dd");
+  const closeUtc = fromZonedTime(`${today}T${dh.close}:00`, timezone);
+  return Math.round((closeUtc.getTime() - now.getTime()) / 60000);
+}
+
+/** Colchón de cierre: en los últimos N minutos antes de cerrar, Julie no anota nuevos walk-ins
+ * (no se alcanza a atenderlos). Ajustable. */
+export const WALKIN_CLOSE_CUTOFF_MIN = 15;
+
 function to12(hhmm: string): string {
   const [h, m] = hhmm.split(":").map(Number);
   const ampm = h < 12 ? "AM" : "PM";
