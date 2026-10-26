@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.barber-appointment-action]
 verify_jwt = false
+
+[functions.nxtup-customer-sms]
+verify_jwt = false
