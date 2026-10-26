@@ -7,7 +7,7 @@
 
 import { rescheduleAppointment, type Barber } from "./appointments.ts";
 import { cancelReminders } from "./reminders.ts";
-import { formatPhoneForWhatsApp, sendWhatsApp } from "./whatsapp.ts";
+import { formatPhoneForWhatsApp, sendTemplate, sendWhatsApp } from "./whatsapp.ts";
 import { formatAppt, getClientLang, t } from "./i18n.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -26,6 +26,30 @@ async function clientCtx(supabase: Supa, barber: Barber, appt: BarberAppt, start
   const phone = appt.customers?.phone_number || null;
   const lang = phone ? await getClientLang(supabase, barber.id, phone) : "es";
   return { phone, lang, when: formatAppt(startUtc, barber.timezone || "America/New_York", lang) };
+}
+
+// WhatsApp solo entrega texto libre si el cliente escribió en las últimas 24 h; fuera de esa
+// ventana el texto se pierde EN SILENCIO (Twilio lo acepta y falla después). Margen de 1 h.
+const WINDOW_MS = 23 * 3600 * 1000;
+
+/** Aviso al cliente: texto libre dentro de la ventana de 24 h, plantilla aprobada fuera de ella
+ *  (vars de la plantilla: {{1}} barbero, {{2}} fecha). Sin SID configurado cae al texto libre. */
+async function notifyClient(
+  supabase: Supa,
+  barber: Barber,
+  c: { phone: string; lang: string; when: string },
+  key: "client_cancelled" | "client_moved_by_barber",
+  tplEnv: "TWILIO_TPL_CLIENT_CANCELLED" | "TWILIO_TPL_CLIENT_MOVED",
+): Promise<void> {
+  const to = formatPhoneForWhatsApp(c.phone);
+  const { data: sess } = await supabase.from("wa_sessions")
+    .select("last_inbound_at").eq("barber_id", barber.id).eq("client_phone", c.phone).maybeSingle();
+  const last = sess?.last_inbound_at ? new Date(sess.last_inbound_at).getTime() : 0;
+  if (Date.now() - last > WINDOW_MS) {
+    const sid = Deno.env.get(c.lang === "en" ? `${tplEnv}_EN` : tplEnv);
+    if (sid && await sendTemplate(to, sid, { "1": barber.name, "2": c.when })) return;
+  }
+  await sendWhatsApp(to, t(key, c.lang as "es" | "en", { barber: barber.name, when: c.when }));
 }
 
 /** ACEPTAR: registra el acuse y avisa al cliente (dirección + "toca la fecha"). Idempotente:
@@ -66,9 +90,7 @@ export async function cancelByBarber(supabase: Supa, barber: Barber, appt: Barbe
   }
   await cancelReminders(supabase, appt.id);
   const c = await clientCtx(supabase, barber, appt, appt.start_time);
-  if (c.phone) {
-    await sendWhatsApp(formatPhoneForWhatsApp(c.phone), t("client_cancelled", c.lang, { barber: barber.name, when: c.when }));
-  }
+  if (c.phone) await notifyClient(supabase, barber, { ...c, phone: c.phone }, "client_cancelled", "TWILIO_TPL_CLIENT_CANCELLED");
   return { ok: true };
 }
 
@@ -83,9 +105,7 @@ export async function rescheduleByBarber(
   const r = await rescheduleAppointment(supabase, { appointmentId: appt.id, barberId: barber.id, newStartUtc, newEndUtc });
   if (!r.ok) return r;
   const c = await clientCtx(supabase, barber, appt, newStartUtc);
-  if (c.phone) {
-    await sendWhatsApp(formatPhoneForWhatsApp(c.phone), t("client_moved_by_barber", c.lang, { barber: barber.name, when: c.when }));
-  }
+  if (c.phone) await notifyClient(supabase, barber, { ...c, phone: c.phone }, "client_moved_by_barber", "TWILIO_TPL_CLIENT_MOVED");
   return { ok: true };
 }
 
